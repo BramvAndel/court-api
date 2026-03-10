@@ -1,14 +1,14 @@
 # API Contract - court-front
 
-This document lists the backend endpoints the frontend calls and the exact behavior/response shapes expected by the current frontend implementation. Please make API changes to match these contracts so the frontend works reliably.
+This document lists the backend endpoints the frontend calls and the exact behavior/response shapes expected by the current frontend implementation. Update the backend to match these contracts so the frontend works reliably.
 
 Base URL
 
-- The frontend reads the base URL from `appConfig.apiBaseUrl`.
+- The frontend reads the base URL from appConfig.apiBaseUrl.
 
 Authentication overview
 
-- The frontend uses cookie-based auth for protected endpoints. All requests that require authentication are sent with `credentials: 'include'` (HTTP-only cookies). The backend must support `POST /auth/refresh` to refresh the session when a request returns `401`.
+- The frontend uses cookie-based auth for protected endpoints. All requests that require authentication are sent with `credentials: 'include'` (HTTP-only cookies). The frontend will attempt `POST /auth/refresh` when a protected request returns `401`.
 - All JSON responses must include `Content-Type: application/json` when returning JSON.
 - Error responses should return JSON with a `message` field, e.g. `{ "message": "Invalid token" }`.
 
@@ -21,7 +21,7 @@ Standard user object (recommended canonical shape)
 
 Notes about flexible shapes
 
-- The current frontend tolerates either returning a user object at the top-level (e.g. `{ id: 1, email: ... }`) or wrapped in a `user` field (e.g. `{ user: { id: 1, ... } }`). To reduce frontend edge-cases, please return the canonical user object at the top-level for all user endpoints (see examples below).
+- The frontend tolerates either returning a user object at the top-level (e.g. `{ id: 1, email: ... }`) or wrapped in a `user` field (e.g. `{ user: { id: 1, ... } }`). To reduce frontend edge-cases, return the canonical user object at the top-level for `login`, `POST /users`, and `GET /users/:id`.
 
 Authentication endpoints (must be implemented)
 
@@ -37,9 +37,8 @@ Authentication endpoints (must be implemented)
 
 - POST `/auth/refresh`
   - Request: no body; called with `credentials: 'include'` (cookie present).
-  - Response (200): success and set refreshed cookie(s) so the original request can be retried.
+  - Response (200): success and set refreshed cookie(s) so the original request can be retried by the frontend.
   - Response (401): when refresh is invalid/expired.
-  - Behavior: when frontend receives `401` from a protected endpoint it will POST `/auth/refresh`; `/auth/refresh` must return `200` (and set cookie) if the session can be refreshed so the frontend can retry the original request.
 
 Game endpoints
 
@@ -56,7 +55,7 @@ Game endpoints
 - POST `/games/:id/signup`
   - Auth: required (cookie)
   - Request: POST with `credentials: 'include'`.
-  - Response (200): JSON `{ message: "Signed up" }` or the created signup object. Return `401` if not authenticated.
+  - Response (200): JSON `{ "message": "Signed up" }` or the created signup object. Return `401` if not authenticated.
 
 - POST `/games`
   - Auth: required (admin)
@@ -64,17 +63,34 @@ Game endpoints
   - Response (201): created game object JSON.
   - Response (403): if user is not admin.
 
-History endpoints
+History endpoints (frontend expects these paths)
 
-- GET `/history`
+- GET `/history/games`
   - Auth: required (cookie)
   - Request: GET with `credentials: 'include'`
-  - Response (200): JSON array of history items for the current user.
+  - Response (200): JSON array of history items (games) for the current user.
 
-- GET `/history/:id`
+- GET `/history/games/:id`
   - Auth: required
-  - Request: GET
+  - Request: GET with `credentials: 'include'`
   - Response (200): JSON history/game object
+
+- GET `/history/elo`
+  - Auth: required
+  - Request: GET with `credentials: 'include'`
+  - Response (200): JSON array of historical ELO ratings for the current user.
+
+Player endpoints (added to match frontend calls in `src/services/apiService.js`)
+
+- GET `/player/search/:username`
+  - Auth: none
+  - Request: GET
+  - Response (200): JSON array of players matching the search criteria
+
+- GET `/player/profile/:id`
+  - Auth: none
+  - Request: GET
+  - Response (200): JSON player profile object
 
 User endpoints
 
@@ -101,7 +117,7 @@ General expectations and error handling
 
 - Protected endpoints must return 401 when the request is unauthorized. The frontend will attempt `POST /auth/refresh` when it receives 401; if refresh succeeds, the frontend retries the original request.
 - All JSON error responses should include `{ "message": "..." }` and appropriate status codes.
-- Accept `credentials: 'include'` for cookie-based sessions; alternatively, supporting `Authorization: Bearer <token>` headers in addition to cookies is fine, but the frontend will not send `Authorization` by default.
+- Accept `credentials: 'include'` for cookie-based sessions.
 
 Shapes referenced in code
 
