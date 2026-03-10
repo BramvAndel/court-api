@@ -92,7 +92,7 @@ CREATE TABLE `users` (
 ALTER TABLE `games`
   ADD PRIMARY KEY (`gameID`),
   ADD KEY `createdBy` (`createdBy`),
-  ADD KEY `winner` (`winner`);
+  ADD KEY `winner` (`winner`),
   ADD KEY `score` (`score`);
 
 --
