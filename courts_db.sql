@@ -93,6 +93,7 @@ ALTER TABLE `games`
   ADD PRIMARY KEY (`gameID`),
   ADD KEY `createdBy` (`createdBy`),
   ADD KEY `winner` (`winner`);
+  ADD KEY `score` (`score`);
 
 --
 -- Indexes for table `game_participants`
@@ -140,6 +141,7 @@ ALTER TABLE `users`
 ALTER TABLE `games`
   ADD CONSTRAINT `games_ibfk_1` FOREIGN KEY (`createdBy`) REFERENCES `users` (`userID`) ON DELETE SET NULL,
   ADD CONSTRAINT `games_ibfk_2` FOREIGN KEY (`winner`) REFERENCES `users` (`userID`) ON DELETE SET NULL;
+  ADD CONSTRAINT `games_ibfk_3` FOREIGN KEY (`score`) REFERENCES `game_participants` (`score`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `game_participants`
