@@ -12,11 +12,18 @@ INSERT INTO games (name, description, createdBy, status) VALUES
   ('Game Two', 'Second test game', 2, 'started');
 
 -- Insert game participants
+-- Insert participants directly with `score` column (schema stores score on participant)
 INSERT INTO game_participants (gameID, userID, score) VALUES
   (1, 1, 10),
   (1, 2, 15),
   (2, 2, 20),
   (2, 3, 5);
+
+INSERT INTO game_participants (gameID, userID, scoreID) VALUES
+  (1, 1, @score1),
+  (1, 2, @score2),
+  (2, 2, @score3),
+  (2, 3, @score4);
 
 -- Insert refresh tokens
 INSERT INTO refresh_tokens (token, userID, expires_at) VALUES
