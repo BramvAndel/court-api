@@ -8,6 +8,7 @@ A RESTful Express API with cookie-based JWT authentication supporting games, use
 
 - Node.js installed
 - npm or yarn package manager
+- MySQL server (local or remote)
 
 ### Installation
 
@@ -20,6 +21,26 @@ npm install
 2. Configure environment variables:
    - Copy `.env.example` to `.env`
    - Update the JWT secrets (IMPORTANT: Change in production!)
+   - Configure your database credentials:
+     ```
+     DB_HOST=localhost          # or your remote MySQL host
+     DB_PORT=3306
+     DB_USER=root               # your MySQL username
+     DB_PASSWORD=your_password  # your MySQL password
+     DB_NAME=king_of_court
+     ```
+
+3. Set up the database:
+
+```bash
+npm run setup:db
+```
+
+This will:
+
+- Create the database if it doesn't exist
+- Create all required tables
+- Load dummy data for testing
 
 ### Running the Server
 

@@ -3,9 +3,9 @@ const gameService = require("../services/gameService");
 /**
  * Get all games
  */
-const getAllGames = (req, res) => {
+const getAllGames = async (req, res) => {
   try {
-    const games = gameService.getAllGames();
+    const games = await gameService.getAllGames();
     res.json(games);
   } catch (error) {
     res
@@ -17,10 +17,10 @@ const getAllGames = (req, res) => {
 /**
  * Get game by ID
  */
-const getGameById = (req, res) => {
+const getGameById = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const game = gameService.getGameById(gameId);
+    const game = await gameService.getGameById(gameId);
 
     if (!game) {
       return res.status(404).json({ message: "Game not found" });
@@ -37,10 +37,10 @@ const getGameById = (req, res) => {
 /**
  * Create a new game (admin only)
  */
-const createGame = (req, res) => {
+const createGame = async (req, res) => {
   try {
     const gameData = req.body;
-    const game = gameService.createGame(gameData, req.user.id);
+    const game = await gameService.createGame(gameData, req.user.id);
 
     res.status(201).json(game);
   } catch (error) {
@@ -53,10 +53,10 @@ const createGame = (req, res) => {
 /**
  * Sign up for a game
  */
-const signupForGame = (req, res) => {
+const signupForGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const signup = gameService.signupForGame(gameId, req.user.id);
+    const signup = await gameService.signupForGame(gameId, req.user.id);
 
     res.json({ message: "Signed up", signup });
   } catch (error) {

@@ -95,11 +95,11 @@ const refresh = async (req, res) => {
 /**
  * Logout user
  */
-const logout = (req, res) => {
+const logout = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
 
-    authService.logoutUser(refreshToken);
+    await authService.logoutUser(refreshToken);
 
     // Clear cookies
     res.clearCookie("accessToken");
@@ -116,9 +116,9 @@ const logout = (req, res) => {
 /**
  * Get user profile
  */
-const getProfile = (req, res) => {
+const getProfile = async (req, res) => {
   try {
-    const user = authService.getUserById(req.user.id);
+    const user = await authService.getUserById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });

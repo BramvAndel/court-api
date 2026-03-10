@@ -4,10 +4,7 @@ const {
   generateRefreshToken,
   verifyToken,
 } = require("../utils/tokenUtils");
-
-// In-memory user storage (replace with database in production)
-const users = [];
-const refreshTokens = [];
+const { query } = require("../config/database");
 
 /**
  * Register a new user
@@ -17,9 +14,13 @@ const refreshTokens = [];
  */
 const registerUser = async ({ email, password, username }) => {
   // Check if user already exists
-  const existingUser = users.find((u) => u.email === email);
-  if (existingUser) {
-    const error = new Error("Email already exists");
+  const existingUsers = await query(
+    "SELECT * FROM users WHERE email = ? OR username = ?",
+    [email, username || email.split("@")[0]],
+  );
+
+  if (existingUsers.length > 0) {
+    const error = new Error("Email or username already exists");
     error.status = 409;
     throw error;
   }
@@ -28,23 +29,16 @@ const registerUser = async ({ email, password, username }) => {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   // Create user
-  const user = {
-    id: users.length + 1,
-    email,
-    username: username || email.split("@")[0], // Default username from email
-    name: username || email.split("@")[0],
-    password: hashedPassword,
-    role: "user", // Default role
-    createdAt: new Date(),
-  };
-
-  users.push(user);
+  const result = await query(
+    "INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)",
+    [username || email.split("@")[0], hashedPassword, email, "user"],
+  );
 
   return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
+    id: result.insertId,
+    email,
+    name: username || email.split("@")[0],
+    role: "user",
   };
 };
 
@@ -57,12 +51,15 @@ const registerUser = async ({ email, password, username }) => {
  */
 const loginUser = async (email, password) => {
   // Find user
-  const user = users.find((u) => u.email === email);
-  if (!user) {
+  const users = await query("SELECT * FROM users WHERE email = ?", [email]);
+
+  if (users.length === 0) {
     const error = new Error("Invalid credentials");
     error.status = 401;
     throw error;
   }
+
+  const user = users[0];
 
   // Verify password
   const validPassword = await bcrypt.compare(password, user.password);
@@ -76,16 +73,20 @@ const loginUser = async (email, password) => {
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
-  // Store refresh token
-  refreshTokens.push(refreshToken);
+  // Store refresh token in database
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  await query(
+    "INSERT INTO refresh_tokens (token, userID, expires_at) VALUES (?, ?, ?)",
+    [refreshToken, user.userID, expiresAt],
+  );
 
   return {
     accessToken,
     refreshToken,
     user: {
-      id: user.id,
+      id: user.userID,
       email: user.email,
-      name: user.name,
+      name: user.username,
       role: user.role,
     },
   };
@@ -98,8 +99,13 @@ const loginUser = async (email, password) => {
  * @throws {Error} If refresh token is invalid
  */
 const refreshAccessToken = async (refreshToken) => {
-  // Check if refresh token exists
-  if (!refreshTokens.includes(refreshToken)) {
+  // Check if refresh token exists and is not expired
+  const tokens = await query(
+    "SELECT * FROM refresh_tokens WHERE token = ? AND expires_at > NOW()",
+    [refreshToken],
+  );
+
+  if (tokens.length === 0) {
     const error = new Error("Invalid refresh token");
     error.status = 403;
     throw error;
@@ -131,12 +137,9 @@ const refreshAccessToken = async (refreshToken) => {
  * Logout user by removing refresh token
  * @param {string} refreshToken - Refresh token to invalidate
  */
-const logoutUser = (refreshToken) => {
+const logoutUser = async (refreshToken) => {
   if (refreshToken) {
-    const index = refreshTokens.indexOf(refreshToken);
-    if (index > -1) {
-      refreshTokens.splice(index, 1);
-    }
+    await query("DELETE FROM refresh_tokens WHERE token = ?", [refreshToken]);
   }
 };
 
@@ -145,18 +148,23 @@ const logoutUser = (refreshToken) => {
  * @param {number} userId - User ID
  * @returns {Object|null} User object without password
  */
-const getUserById = (userId) => {
-  const user = users.find((u) => u.id === userId);
-  if (!user) {
+const getUserById = async (userId) => {
+  const users = await query(
+    "SELECT userID, username, email, role, created_at FROM users WHERE userID = ?",
+    [userId],
+  );
+
+  if (users.length === 0) {
     return null;
   }
 
+  const user = users[0];
   return {
-    id: user.id,
+    id: user.userID,
     email: user.email,
-    name: user.name,
+    name: user.username,
     role: user.role,
-    createdAt: user.createdAt,
+    createdAt: user.created_at,
   };
 };
 
@@ -166,24 +174,30 @@ const getUserById = (userId) => {
  * @param {Object} updates - Fields to update
  * @returns {Object|null} Updated user object without password
  */
-const updateUser = (userId, updates) => {
-  const user = users.find((u) => u.id === userId);
-  if (!user) {
-    return null;
+const updateUser = async (userId, updates) => {
+  const updateFields = [];
+  const values = [];
+
+  if (updates.email) {
+    updateFields.push("email = ?");
+    values.push(updates.email);
+  }
+  if (updates.name || updates.username) {
+    updateFields.push("username = ?");
+    values.push(updates.name || updates.username);
   }
 
-  // Update allowed fields
-  if (updates.email) user.email = updates.email;
-  if (updates.name) user.name = updates.name;
-  if (updates.username) user.username = updates.username;
+  if (updateFields.length === 0) {
+    return getUserById(userId);
+  }
 
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    createdAt: user.createdAt,
-  };
+  values.push(userId);
+  await query(
+    `UPDATE users SET ${updateFields.join(", ")} WHERE userID = ?`,
+    values,
+  );
+
+  return getUserById(userId);
 };
 
 /**
@@ -191,26 +205,45 @@ const updateUser = (userId, updates) => {
  * @param {number} userId - User ID
  * @returns {boolean} Success status
  */
-const deleteUser = (userId) => {
-  const index = users.findIndex((u) => u.id === userId);
-  if (index === -1) {
-    return false;
-  }
-  users.splice(index, 1);
-  return true;
+const deleteUser = async (userId) => {
+  const result = await query("DELETE FROM users WHERE userID = ?", [userId]);
+  return result.affectedRows > 0;
 };
 
 /**
  * Get all users (for internal use)
  * @returns {Array} Array of users without passwords
  */
-const getAllUsers = () => {
+const getAllUsers = async () => {
+  const users = await query(
+    "SELECT userID, username, email, role, created_at FROM users",
+  );
+
   return users.map((user) => ({
-    id: user.id,
+    id: user.userID,
     email: user.email,
-    name: user.name,
+    name: user.username,
     role: user.role,
-    createdAt: user.createdAt,
+    createdAt: user.created_at,
+  }));
+};
+
+/**
+ * Search users by username
+ * @param {string} searchTerm - Search term
+ * @returns {Array} Array of matching users
+ */
+const searchUsersByUsername = async (searchTerm) => {
+  const users = await query(
+    "SELECT userID, username, email, role FROM users WHERE username LIKE ?",
+    [`%${searchTerm}%`],
+  );
+
+  return users.map((user) => ({
+    id: user.userID,
+    email: user.email,
+    name: user.username,
+    role: user.role,
   }));
 };
 
@@ -223,4 +256,5 @@ module.exports = {
   updateUser,
   deleteUser,
   getAllUsers,
+  searchUsersByUsername,
 };

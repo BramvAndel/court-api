@@ -4,6 +4,7 @@ const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const gameRoutes = require("./routes/games");
 const historyRoutes = require("./routes/history");
+const playerRoutes = require("./routes/player");
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/games", gameRoutes);
 app.use("/api/history", historyRoutes);
+app.use("/api/player", playerRoutes);
 
 // Basic health check route
 app.get("/", (req, res) => {

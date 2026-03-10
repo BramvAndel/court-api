@@ -3,10 +3,10 @@ const authService = require("../services/authService");
 /**
  * Get user by ID
  */
-const getUserById = (req, res) => {
+const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const user = authService.getUserById(userId);
+    const user = await authService.getUserById(userId);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -28,7 +28,7 @@ const getUserById = (req, res) => {
 /**
  * Update user by ID
  */
-const updateUser = (req, res) => {
+const updateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
@@ -38,7 +38,7 @@ const updateUser = (req, res) => {
     }
 
     const updates = req.body;
-    const user = authService.updateUser(userId, updates);
+    const user = await authService.updateUser(userId, updates);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -55,7 +55,7 @@ const updateUser = (req, res) => {
 /**
  * Delete user by ID
  */
-const deleteUser = (req, res) => {
+const deleteUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
@@ -64,7 +64,7 @@ const deleteUser = (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const success = authService.deleteUser(userId);
+    const success = await authService.deleteUser(userId);
 
     if (!success) {
       return res.status(404).json({ message: "User not found" });

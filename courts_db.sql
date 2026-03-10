@@ -39,7 +39,7 @@ CREATE TABLE `game_participants` (
   KEY `gameID` (`gameID`),
   KEY `userID` (`userID`),
   CONSTRAINT `game_participants_ibfk_1` FOREIGN KEY (`gameID`) REFERENCES `games` (`gameID`) ON DELETE CASCADE,
-  CONSTRAINT `game_participants_ibfk_2` FOREIGN KEY (`userID`) REFERENCES `users` (`userID`) ON DELETE CASCADE,
+  CONSTRAINT `game_participants_ibfk_2` FOREIGN KEY (`userID`) REFERENCES `users` (`userID`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 ALTER TABLE `games`
