@@ -30,7 +30,7 @@ DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your_mysql_password
-DB_NAME=king_of_court
+DB_NAME=courts_db
 ```
 
 ### 3. Run Setup Script
@@ -71,7 +71,7 @@ DB_HOST=your-remote-host.com
 DB_PORT=3306
 DB_USER=your_username
 DB_PASSWORD=your_password
-DB_NAME=king_of_court
+DB_NAME=courts_db
 ```
 
 For SSL connections (recommended for production), you may need to add:
@@ -92,7 +92,7 @@ DB_HOST=your-db-instance.region.rds.amazonaws.com
 DB_PORT=3306
 DB_USER=admin
 DB_PASSWORD=your_secure_password
-DB_NAME=king_of_court
+DB_NAME=courts_db
 ```
 
 ### Example: DigitalOcean Setup
@@ -107,7 +107,7 @@ DB_HOST=your-db-do-user-123456-0.db.ondigitalocean.com
 DB_PORT=25060
 DB_USER=doadmin
 DB_PASSWORD=your_password
-DB_NAME=king_of_court
+DB_NAME=courts_db
 ```
 
 ## Running the Setup
@@ -138,19 +138,19 @@ If you prefer to set up the database manually:
 2. Create the database:
 
    ```sql
-   CREATE DATABASE king_of_court;
-   USE king_of_court;
+   CREATE DATABASE courts_db;
+   USE courts_db;
    ```
 
 3. Run the schema file:
 
    ```bash
-   mysql -h your-host -u your-user -p king_of_court < courts_db.sql
+   mysql -h your-host -u your-user -p courts_db < courts_db.sql
    ```
 
 4. (Optional) Load dummy data:
    ```bash
-   mysql -h your-host -u your-user -p king_of_court < dummy_data.sql
+   mysql -h your-host -u your-user -p courts_db < dummy_data.sql
    ```
 
 ## Connection Pooling
@@ -189,12 +189,12 @@ Server is running on http://localhost:3000
 ### Access Denied
 
 - Verify username and password
-- Check user privileges: `GRANT ALL PRIVILEGES ON king_of_court.* TO 'user'@'%';`
+- Check user privileges: `GRANT ALL PRIVILEGES ON courts_db.* TO 'user'@'%';`
 
 ### Unknown Database
 
 - Run `npm run setup:db` to create the database
-- Or create it manually: `CREATE DATABASE king_of_court;`
+- Or create it manually: `CREATE DATABASE courts_db;`
 
 ### SSL Issues (Remote Connections)
 

@@ -162,7 +162,7 @@ GET /api/games 200 45.23 ms - user-123
 ### Skip Certain Logs
 
 ```bash
-# Skip health check endpoints
+# Skip health check endpoints (/api/health)
 HTTP_LOG_SKIP_HEALTH=true
 
 # Skip successful requests (only log errors)

@@ -7,8 +7,8 @@ const { logger } = require("../config/logger");
 
 // Response time in milliseconds
 morgan.token("response-time-ms", (req, res) => {
-  if (!req._startTime) return "-";
-  const diff = process.hrtime(req._startTime);
+  if (!req._hrtimeStart) return "-";
+  const diff = process.hrtime(req._hrtimeStart);
   return (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
 });
 
@@ -128,7 +128,7 @@ function shouldSkipLog(req, res) {
   }
 
   // Skip health checks
-  if (config.skipHealthChecks && (req.url === "/health" || req.url === "/")) {
+  if (config.skipHealthChecks && (req.url === "/api/health" || req.url === "/")) {
     return true;
   }
 
@@ -152,7 +152,7 @@ const httpLogger = morgan(getFormat(), {
  * Middleware to add start time to request for accurate timing
  */
 const requestTimer = (req, res, next) => {
-  req._startTime = process.hrtime();
+  req._hrtimeStart = process.hrtime();
   next();
 };
 

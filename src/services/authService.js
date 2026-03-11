@@ -146,11 +146,12 @@ const logoutUser = async (refreshToken) => {
 /**
  * Get user by ID
  * @param {number} userId - User ID
+ * @param {boolean} isAdmin - Whether the requester is an admin
  * @returns {Object|null} User object without password
  */
-const getUserById = async (userId) => {
+const getUserById = async (userId, isAdmin = false) => {
   const users = await query(
-    "SELECT userID, username, email, role, created_at FROM users WHERE userID = ?",
+    "SELECT userID, username, email, role, elo, created_at FROM users WHERE userID = ?",
     [userId],
   );
 
@@ -159,13 +160,19 @@ const getUserById = async (userId) => {
   }
 
   const user = users[0];
-  return {
+  const profile = {
     id: user.userID,
-    email: user.email,
     name: user.username,
-    role: user.role,
+    elo: user.elo,
     createdAt: user.created_at,
   };
+
+  if (isAdmin) {
+    profile.email = user.email;
+    profile.role = user.role;
+  }
+
+  return profile;
 };
 
 /**
@@ -216,7 +223,7 @@ const deleteUser = async (userId) => {
  */
 const getAllUsers = async () => {
   const users = await query(
-    "SELECT userID, username, email, role, created_at FROM users",
+    "SELECT userID, username, email, role, elo, created_at FROM users",
   );
 
   return users.map((user) => ({
@@ -224,6 +231,7 @@ const getAllUsers = async () => {
     email: user.email,
     name: user.username,
     role: user.role,
+    elo: user.elo,
     createdAt: user.created_at,
   }));
 };
@@ -235,15 +243,14 @@ const getAllUsers = async () => {
  */
 const searchUsersByUsername = async (searchTerm) => {
   const users = await query(
-    "SELECT userID, username, email, role FROM users WHERE username LIKE ?",
+    "SELECT userID, username, elo FROM users WHERE username LIKE ?",
     [`%${searchTerm}%`],
   );
 
   return users.map((user) => ({
     id: user.userID,
-    email: user.email,
     name: user.username,
-    role: user.role,
+    elo: user.elo,
   }));
 };
 

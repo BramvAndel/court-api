@@ -8,5 +8,6 @@ const router = express.Router();
 router.get("/games", authenticateToken, historyController.getUserHistory);
 router.get("/games/:id", authenticateToken, historyController.getHistoryById);
 router.get("/elo", authenticateToken, historyController.getUserEloHistory);
+router.get("/elo/:userId", authenticateToken, historyController.getPlayerEloHistory);
 
 module.exports = router;

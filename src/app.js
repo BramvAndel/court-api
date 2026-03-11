@@ -64,18 +64,22 @@ app.get("/", (req, res) => {
 });
 
 // Health check endpoint with detailed status
-app.get("/health", async (req, res) => {
-  const { testConnection } = require("./config/database");
-  const dbConnected = await testConnection();
+app.get("/api/health", async (req, res, next) => {
+  try {
+    const { testConnection } = require("./config/database");
+    const dbConnected = await testConnection();
 
-  const health = {
-    status: dbConnected ? "healthy" : "unhealthy",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    database: dbConnected ? "connected" : "disconnected",
-  };
+    const health = {
+      status: dbConnected ? "healthy" : "unhealthy",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: dbConnected ? "connected" : "disconnected",
+    };
 
-  res.status(dbConnected ? 200 : 503).json(health);
+    res.status(dbConnected ? 200 : 503).json(health);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Error logging middleware (logs errors before sending response)
