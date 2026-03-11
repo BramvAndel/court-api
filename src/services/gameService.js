@@ -85,7 +85,7 @@ const getAllGames = async () => {
       status: game.status,
       createdBy: game.createdBy,
       winnerUserId: game.winner_userID,
-      participants: gameParticipants,
+      signupCount: gameParticipants.length,
       averageElo,
     };
   });
@@ -107,7 +107,7 @@ const getGameById = async (gameId) => {
 
   // Get participants
   const participants = await query(
-    `SELECT gp.participantID, gp.userID, gp.score, u.username
+    `SELECT gp.participantID, gp.userID, u.elo, u.username
      FROM game_participants gp
      JOIN users u ON gp.userID = u.userID
      WHERE gp.gameID = ?`,
@@ -129,7 +129,7 @@ const getGameById = async (gameId) => {
       id: p.participantID,
       userId: p.userID,
       username: p.username,
-      score: p.score,
+      elo: p.elo,
     })),
   };
 };

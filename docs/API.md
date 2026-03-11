@@ -335,7 +335,7 @@ If an admin makes the request, the full profile is returned. If a regular user m
 
 ### `GET /api/games` (public)
 
-List all **planned** games with participant elo ratings.
+List all **planned** games with signup count and average elo.
 
 > This endpoint only returns games with `planned` status.
 
@@ -354,12 +354,7 @@ List all **planned** games with participant elo ratings.
     "status": "planned",
     "createdBy": 1,
     "winnerUserId": null,
-    "participants": [
-      { "userId": 2, "username": "jane_doe", "elo": 1050 },
-      { "userId": 3, "username": "john_smith", "elo": 980 },
-      { "userId": 5, "username": "player5", "elo": 1100 },
-      { "userId": 8, "username": "player8", "elo": 970 }
-    ],
+    "signupCount": 4,
     "averageElo": 1025
   }
 ]
@@ -369,7 +364,7 @@ List all **planned** games with participant elo ratings.
 
 ### `GET /api/games/:id` (auth required)
 
-Get full game details including all participants.
+Get full game details including all participants and their elo ratings.
 
 **200 OK**
 
@@ -390,7 +385,7 @@ Get full game details including all participants.
       "id": 1,
       "userId": 3,
       "username": "bram",
-      "score": null
+      "elo": 1050
     }
   ]
 }
