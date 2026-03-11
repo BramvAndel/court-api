@@ -1,3 +1,6 @@
+CREATE DATABASE IF NOT EXISTS `courts_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `courts_db`;
+
 CREATE TABLE `users` (
   `userID` int(11) NOT NULL AUTO_INCREMENT,
   `username` varchar(255) NOT NULL,
@@ -5,6 +8,7 @@ CREATE TABLE `users` (
   `email` varchar(255) NOT NULL,
   `phone_number` varchar(20) DEFAULT NULL,
   `role` enum('user','admin') DEFAULT 'user',
+  `elo` int(11) DEFAULT 1000,
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`userID`),
@@ -12,10 +16,21 @@ CREATE TABLE `users` (
   UNIQUE KEY `uq_users_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE historical_elo (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `userID` int(11) NOT NULL,
+  `elo` int(11) NOT NULL,
+  `recorded_at` datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `userID` (`userID`),
+  CONSTRAINT `historical_elo_ibfk_1` FOREIGN KEY (`userID`) REFERENCES `users` (`userID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE `games` (
   `gameID` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL DEFAULT 'Unnamed Game',
   `description` text DEFAULT NULL,
+  `plannedAt` datetime DEFAULT current_timestamp(),
   `createdAt` datetime DEFAULT current_timestamp(),
   `startedAt` datetime DEFAULT NULL,
   `endedAt` datetime DEFAULT NULL,
@@ -55,3 +70,12 @@ CREATE TABLE `refresh_tokens` (
   KEY `userID` (`userID`),
   CONSTRAINT `refresh_tokens_ibfk_1` FOREIGN KEY (`userID`) REFERENCES `users` (`userID`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DELIMITER $$
+CREATE TRIGGER trg_historical_elo_after_insert
+AFTER INSERT ON historical_elo
+FOR EACH ROW
+BEGIN
+  UPDATE users SET elo = NEW.elo WHERE userID = NEW.userID;
+END$$
+DELIMITER ;
