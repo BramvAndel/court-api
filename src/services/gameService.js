@@ -39,29 +39,56 @@ const createGame = async (gameData, creatorId) => {
  */
 const getAllGames = async () => {
   const games = await query(`
-    SELECT 
-      g.*,
-      COUNT(gp.participantID) as signupCount
-    FROM games g
-    LEFT JOIN game_participants gp ON g.gameID = gp.gameID
-    WHERE g.status = 'planned'
-    GROUP BY g.gameID
-    ORDER BY g.createdAt DESC
+    SELECT * FROM games WHERE status = 'planned' ORDER BY createdAt DESC
   `);
 
-  return games.map((game) => ({
-    id: game.gameID,
-    name: game.name,
-    description: game.description,
-    plannedAt: game.plannedAt,
-    createdAt: game.createdAt,
-    startedAt: game.startedAt,
-    endedAt: game.endedAt,
-    status: game.status,
-    createdBy: game.createdBy,
-    winnerUserId: game.winner_userID,
-    signupCount: game.signupCount,
-  }));
+  if (games.length === 0) return [];
+
+  const gameIds = games.map((g) => g.gameID);
+  const placeholders = gameIds.map(() => "?").join(",");
+  const participants = await query(
+    `SELECT gp.gameID, gp.userID, u.username, u.elo
+     FROM game_participants gp
+     JOIN users u ON gp.userID = u.userID
+     WHERE gp.gameID IN (${placeholders})`,
+    gameIds,
+  );
+
+  const participantsByGame = {};
+  for (const p of participants) {
+    if (!participantsByGame[p.gameID]) participantsByGame[p.gameID] = [];
+    participantsByGame[p.gameID].push({
+      userId: p.userID,
+      username: p.username,
+      elo: p.elo,
+    });
+  }
+
+  return games.map((game) => {
+    const gameParticipants = participantsByGame[game.gameID] || [];
+    const averageElo =
+      gameParticipants.length > 0
+        ? Math.round(
+            gameParticipants.reduce((sum, p) => sum + p.elo, 0) /
+              gameParticipants.length,
+          )
+        : null;
+
+    return {
+      id: game.gameID,
+      name: game.name,
+      description: game.description,
+      plannedAt: game.plannedAt,
+      createdAt: game.createdAt,
+      startedAt: game.startedAt,
+      endedAt: game.endedAt,
+      status: game.status,
+      createdBy: game.createdBy,
+      winnerUserId: game.winner_userID,
+      participants: gameParticipants,
+      averageElo,
+    };
+  });
 };
 
 /**
