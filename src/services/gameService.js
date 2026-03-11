@@ -10,14 +10,13 @@ const createGame = async (gameData, creatorId) => {
   const { name, description, plannedAt, startedAt, endedAt, status } = gameData;
 
   const result = await query(
-    "INSERT INTO games (name, description, plannedAt, startedAt, endedAt, status, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO games (name, description, plannedAt, startedAt, endedAt, createdBy) VALUES (?, ?, ?, ?, ?, ?)",
     [
       name || "Unnamed Game",
       description || null,
       plannedAt || null,
       startedAt || null,
       endedAt || null,
-      status || "planned",
       creatorId,
     ],
   );
@@ -164,7 +163,7 @@ const calculateElo = (ratingA, ratingB, scoreA, K = 32) => {
   const expectedB = 1 - expectedA;
   return {
     newA: Math.round(ratingA + K * (scoreA - expectedA)),
-    newB: Math.round(ratingB + K * ((1 - scoreA) - expectedB)),
+    newB: Math.round(ratingB + K * (1 - scoreA - expectedB)),
   };
 };
 
@@ -181,7 +180,9 @@ const startGame = async (gameId) => {
     throw error;
   }
   if (games[0].status !== "planned") {
-    const error = new Error(`Game cannot be started from status '${games[0].status}'`);
+    const error = new Error(
+      `Game cannot be started from status '${games[0].status}'`,
+    );
     error.status = 409;
     throw error;
   }
@@ -191,7 +192,9 @@ const startGame = async (gameId) => {
     [gameId],
   );
 
-  return { ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0] };
+  return {
+    ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
+  };
 };
 
 /**
@@ -207,7 +210,9 @@ const endGame = async (gameId) => {
     throw error;
   }
   if (games[0].status !== "started") {
-    const error = new Error(`Game cannot be ended from status '${games[0].status}'`);
+    const error = new Error(
+      `Game cannot be ended from status '${games[0].status}'`,
+    );
     error.status = 409;
     throw error;
   }
@@ -217,7 +222,9 @@ const endGame = async (gameId) => {
     [gameId],
   );
 
-  return { ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0] };
+  return {
+    ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
+  };
 };
 
 /**
@@ -232,10 +239,9 @@ const endGame = async (gameId) => {
 const processGame = async (gameId, winnerId, scores) => {
   return transaction(async (conn) => {
     // 1. Validate game state
-    const [game] = await conn.execute(
-      "SELECT * FROM games WHERE gameID = ?",
-      [gameId],
-    );
+    const [game] = await conn.execute("SELECT * FROM games WHERE gameID = ?", [
+      gameId,
+    ]);
     if (game.length === 0) {
       const error = new Error("Game not found");
       error.status = 404;
@@ -259,7 +265,9 @@ const processGame = async (gameId, winnerId, scores) => {
     );
 
     if (participants.length < 2) {
-      const error = new Error("A game needs at least 2 participants to process");
+      const error = new Error(
+        "A game needs at least 2 participants to process",
+      );
       error.status = 422;
       throw error;
     }
@@ -283,8 +291,12 @@ const processGame = async (gameId, winnerId, scores) => {
     // 5. Calculate ELO changes
     // Winner is paired against every other participant; losers are only
     // paired against the winner (standard multi-player ELO approach).
-    const eloMap = Object.fromEntries(participants.map((p) => [p.userID, p.elo]));
-    const eloChanges = Object.fromEntries(participants.map((p) => [p.userID, 0]));
+    const eloMap = Object.fromEntries(
+      participants.map((p) => [p.userID, p.elo]),
+    );
+    const eloChanges = Object.fromEntries(
+      participants.map((p) => [p.userID, 0]),
+    );
 
     const losers = participants.filter((p) => p.userID !== winnerId);
     for (const loser of losers) {
