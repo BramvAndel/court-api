@@ -13,11 +13,11 @@ INSERT INTO game_participants (gameID, userID, score) VALUES
   (2, 2, 20),
   (2, 3, 5);
 
-INSERT INTO game_participants (gameID, userID, scoreID) VALUES
-  (1, 1, 95),
-  (1, 2, 45),
-  (2, 2, 80),
-  (2, 3, 25);
+-- historical ELO records: trigger `trg_historical_elo_after_insert` will update `users.elo`
+INSERT INTO historical_elo (userID, elo, recorded_at) VALUES
+  (1, 1100, '2026-03-01 10:00:00'),
+  (2, 1200, '2026-03-02 11:00:00'),
+  (3, 900,  '2026-03-03 12:00:00');
 
 INSERT INTO refresh_tokens (token, userID, expires_at) VALUES
   ('token123', 1, '2026-04-01 00:00:00'),
