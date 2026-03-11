@@ -48,8 +48,30 @@ const getUserEloHistory = async (req, res) => {
   }
 };
 
+/**
+ * Get ELO history for a specific player (self or admin)
+ */
+const getPlayerEloHistory = async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.userId);
+
+    // Users can only view their own ELO; admins can view anyone's
+    if (req.user.role !== "admin" && req.user.id !== targetId) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const eloHistory = await historyService.getUserEloHistory(targetId);
+    res.json(eloHistory);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch player ELO history" });
+  }
+};
+
 module.exports = {
   getUserHistory,
   getHistoryById,
   getUserEloHistory,
+  getPlayerEloHistory,
 };

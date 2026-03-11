@@ -1,500 +1,180 @@
 # King of Court API
 
-A RESTful Express API with cookie-based JWT authentication supporting games, user management, and history tracking.
+A RESTful Express.js API for managing court games, player ELO ratings, and match history — with cookie-based JWT authentication.
 
-## Getting Started
+---
 
-### Prerequisites
-
-- Node.js installed
-- npm or yarn package manager
-- MySQL server (local or remote)
-
-### Installation
-
-1. Install dependencies:
+## Quick Start
 
 ```bash
+# 1. Install dependencies
 npm install
-```
 
-2. Configure environment variables:
-   - Copy `.env.example` to `.env`
-   - Update the JWT secrets (IMPORTANT: Change in production!)
-   - Configure your database credentials:
-     ```
-     DB_HOST=localhost          # or your remote MySQL host
-     DB_PORT=3306
-     DB_USER=root               # your MySQL username
-     DB_PASSWORD=your_password  # your MySQL password
-     DB_NAME=king_of_court
-     ```
+# 2. Configure environment
+cp .env.example .env
+# → Edit .env with your MySQL credentials and JWT secrets
 
-3. Set up the database:
-
-```bash
+# 3. Create database & tables
 npm run setup:db
-```
 
-This will:
-
-- Create the database if it doesn't exist
-- Create all required tables
-- Load dummy data for testing
-
-### Running the Server
-
-Development mode (with auto-reload):
-
-```bash
+# 4. Start development server
 npm run dev
+# → http://localhost:3000
 ```
 
-Production mode:
+---
 
-```bash
-npm start
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start with auto-reload (`node --watch`) |
+| `npm start` | Start in production mode |
+| `npm run setup:db` | Create database schema and load dummy data |
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values. Key variables:
+
+```env
+PORT=3000
+NODE_ENV=development
+
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=courts_db
+
+JWT_SECRET=change-me-in-production
+JWT_REFRESH_SECRET=change-me-in-production
 ```
 
-The server will run on `http://localhost:3000` by default.
+See [docs/DATABASE_SETUP.md](docs/DATABASE_SETUP.md) for full database setup options including remote/cloud providers.
 
-## Authentication
-
-This API uses **HTTP-only cookie-based authentication**:
-
-- Access tokens are valid for 15 minutes
-- Refresh tokens are valid for 7 days
-- All requests requiring authentication must include `credentials: 'include'` in the frontend
-- When an access token expires (401 response), call `/api/auth/refresh` to get a new one
-
-## API Endpoints
-
-### Authentication Routes
-
-#### 1. Register a New User
-
-```http
-POST /api/users
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "your_password",
-  "username": "optional_username"
-}
-```
-
-**Response (201):**
-
-```json
-{
-  "id": 1,
-  "email": "user@example.com",
-  "name": "user",
-  "role": "user"
-}
-```
-
-#### 2. Login
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-Credentials: include
-
-{
-  "email": "user@example.com",
-  "password": "your_password"
-}
-```
-
-**Response (200):**
-
-```json
-{
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "name": "user",
-    "role": "user"
-  }
-}
-```
-
-**Side effect:** Sets HTTP-only cookies `accessToken` and `refreshToken`
-
-#### 3. Refresh Access Token
-
-```http
-POST /api/auth/refresh
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "message": "Token refreshed"
-}
-```
-
-**Side effect:** Refreshes the `accessToken` cookie
-
-#### 4. Logout
-
-```http
-POST /api/auth/logout
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "message": "Logged out"
-}
-```
-
-**Side effect:** Clears authentication cookies
-
-#### 5. Get User Profile (Protected)
-
-```http
-GET /api/auth/profile
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "id": 1,
-  "email": "user@example.com",
-  "name": "user",
-  "role": "user",
-  "createdAt": "2026-03-10T..."
-}
-```
-
-### User Routes
-
-#### Get User by ID (Protected)
-
-```http
-GET /api/users/:id
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "id": 1,
-  "email": "user@example.com",
-  "name": "user",
-  "role": "user",
-  "createdAt": "2026-03-10T..."
-}
-```
-
-#### Update User (Protected)
-
-```http
-PUT /api/users/:id
-Content-Type: application/json
-Credentials: include
-
-{
-  "name": "New Name",
-  "email": "newemail@example.com"
-}
-```
-
-**Response (200):**
-
-```json
-{
-  "id": 1,
-  "email": "newemail@example.com",
-  "name": "New Name",
-  "role": "user",
-  "createdAt": "2026-03-10T..."
-}
-```
-
-#### Delete User (Protected)
-
-```http
-DELETE /api/users/:id
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "message": "User deleted successfully"
-}
-```
-
-### Game Routes
-
-#### Get All Games (Public)
-
-```http
-GET /api/games
-```
-
-**Response (200):**
-
-```json
-[
-  {
-    "id": 1,
-    "name": "Basketball Tournament",
-    "date": "2026-03-15",
-    "location": "Main Court",
-    "createdBy": 1,
-    "createdAt": "2026-03-10T...",
-    "signupCount": 5
-  }
-]
-```
-
-#### Get Game by ID (Public)
-
-```http
-GET /api/games/:id
-```
-
-**Response (200):**
-
-```json
-{
-  "id": 1,
-  "name": "Basketball Tournament",
-  "date": "2026-03-15",
-  "location": "Main Court",
-  "createdBy": 1,
-  "createdAt": "2026-03-10T...",
-  "signups": [
-    {
-      "id": 1,
-      "gameId": 1,
-      "userId": 2,
-      "signedUpAt": "2026-03-10T..."
-    }
-  ]
-}
-```
-
-#### Sign Up for Game (Protected)
-
-```http
-POST /api/games/:id/signup
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "message": "Signed up",
-  "signup": {
-    "id": 1,
-    "gameId": 1,
-    "userId": 2,
-    "signedUpAt": "2026-03-10T..."
-  }
-}
-```
-
-#### Create Game (Admin Only)
-
-```http
-POST /api/games
-Content-Type: application/json
-Credentials: include
-
-{
-  "name": "Basketball Tournament",
-  "date": "2026-03-15",
-  "location": "Main Court",
-  "description": "Annual tournament"
-}
-```
-
-**Response (201):**
-
-```json
-{
-  "id": 1,
-  "name": "Basketball Tournament",
-  "date": "2026-03-15",
-  "location": "Main Court",
-  "description": "Annual tournament",
-  "createdBy": 1,
-  "createdAt": "2026-03-10T...",
-  "signups": []
-}
-```
-
-### History Routes
-
-#### Get User History (Protected)
-
-```http
-GET /api/history
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-[
-  {
-    "id": 1,
-    "userId": 1,
-    "gameId": 1,
-    "createdAt": "2026-03-10T..."
-  }
-]
-```
-
-#### Get History Entry by ID (Protected)
-
-```http
-GET /api/history/:id
-Credentials: include
-```
-
-**Response (200):**
-
-```json
-{
-  "id": 1,
-  "userId": 1,
-  "gameId": 1,
-  "createdAt": "2026-03-10T..."
-}
-```
-
-## Error Responses
-
-All errors follow this format:
-
-```json
-{
-  "message": "Error description"
-}
-```
-
-Common status codes:
-
-- `400` - Bad Request (missing required fields)
-- `401` - Unauthorized (missing or invalid token, refresh needed)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not Found
-- `409` - Conflict (e.g., email already exists)
-- `500` - Internal Server Error
-
-## Creating an Admin User
-
-By default, all registered users have the `user` role. To create an admin user:
-
-1. Register a normal user through the API
-2. Manually edit `src/services/authService.js` and change the user's role to `"admin"` in the users array
-
-Example:
-
-```javascript
-// In authService.js, find the user in the users array and update:
-{
-  id: 1,
-  email: "admin@example.com",
-  name: "admin",
-  role: "admin",  // Change this from "user" to "admin"
-  // ...
-}
-```
-
-In production, you would typically have a database migration or seed script to create admin users.
-
-## Token Management
-
-- **Access Token**: Short-lived (15 minutes by default), used for API requests
-- **Refresh Token**: Long-lived (7 days by default), used to get new access tokens
-
-### Using Protected Routes
-
-Include the access token in the Authorization header:
-
-```
-Authorization: Bearer your_access_token
-```
+---
 
 ## Project Structure
 
 ```
-kingOfCourt/
+court-api/
+├── index.js                    # Entry point — starts server
 ├── src/
-│   ├── controllers/
-│   │   └── authController.js    # Request/response handlers
-│   ├── services/
-│   │   └── authService.js       # Business logic
-│   ├── utils/
-│   │   └── tokenUtils.js        # JWT token utilities
+│   ├── app.js                  # Express app, middleware stack
+│   ├── config/
+│   │   ├── database.js         # MySQL connection pool + helpers
+│   │   └── logger.js           # Winston logger configuration
+│   ├── controllers/            # HTTP request/response handlers
+│   │   ├── authController.js
+│   │   ├── gameController.js
+│   │   ├── historyController.js
+│   │   ├── playerController.js
+│   │   └── userController.js
 │   ├── middleware/
-│   │   └── auth.js              # JWT authentication middleware
+│   │   ├── auth.js             # JWT auth + admin guard
+│   │   └── logger.js           # HTTP logging middleware
 │   ├── routes/
-│   │   └── auth.js              # Route definitions
-│   └── app.js                   # Express app configuration
-├── .env                         # Environment variables
-├── .gitignore
-├── index.js                     # Application entry point
-├── package.json
-└── README.md
+│   │   ├── auth.js
+│   │   ├── games.js
+│   │   ├── history.js
+│   │   ├── player.js
+│   │   └── users.js
+│   ├── services/               # Business logic
+│   │   ├── authService.js
+│   │   ├── gameService.js      # Includes ELO calculation
+│   │   └── historyService.js
+│   └── utils/
+│       ├── seedAdmin.js
+│       └── tokenUtils.js
+├── scripts/
+│   └── setupDatabase.js
+├── courts_db.sql               # Database schema
+├── dummy_data.sql              # Sample data
+├── .env.example
+└── docs/                       # Full documentation
+    ├── API.md                  # Complete API reference ← start here
+    ├── DATABASE_SETUP.md
+    ├── LOGGING.md
+    ├── LOGGING_QUICKSTART.md
+    ├── API_TESTING.md
+    ├── API_CONTRACT.md
+    └── API_IMPROVEMENTS.md
 ```
 
-### Architecture
+---
 
-The application follows a layered architecture:
+## API Overview
 
-- **Controllers**: Handle HTTP requests and responses
-- **Services**: Contain business logic and data operations
-- **Utils**: Reusable utility functions (token generation, validation)
-- **Middleware**: Authentication and request processing
-- **Routes**: Define API endpoints and map to controllers
+Full reference: **[docs/API.md](docs/API.md)**
 
-## Security Notes
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| `POST` | `/api/auth/register` | — | Register a new account |
+| `POST` | `/api/auth/login` | — | Login, receive session cookies |
+| `POST` | `/api/auth/refresh` | Cookie | Refresh access token |
+| `POST` | `/api/auth/logout` | Cookie | Invalidate session |
+| `GET` | `/api/auth/profile` | 🔒 | Own profile |
+| `GET` | `/api/users/:id` | 🔒 | User by ID (own or admin) |
+| `PUT` | `/api/users/:id` | 🔒 | Update user (own or admin) |
+| `DELETE` | `/api/users/:id` | 🔒 | Delete user (own or admin) |
+| `GET` | `/api/player/search/:username` | — | Search players |
+| `GET` | `/api/player/profile/:id` | — | Public player profile |
+| `GET` | `/api/games` | — | List all games |
+| `GET` | `/api/games/:id` | — | Game details + participants |
+| `POST` | `/api/games` | 🔒 Admin | Create game |
+| `POST` | `/api/games/:id/signup` | 🔒 | Sign up for a game |
+| `PUT` | `/api/games/:id/start` | 🔒 Admin | Start game |
+| `PUT` | `/api/games/:id/end` | 🔒 Admin | End game |
+| `PUT` | `/api/games/:id/process` | 🔒 Admin | Record scores + calculate ELO |
+| `GET` | `/api/history/games` | 🔒 | Own game history |
+| `GET` | `/api/history/games/:id` | 🔒 | Single game from own history |
+| `GET` | `/api/history/elo` | 🔒 | Own ELO history |
+| `GET` | `/api/history/elo/:userId` | 🔒 | ELO history (own or admin) |
+| `GET` | `/health` | — | Server + DB health check |
 
-⚠️ **Important for Production:**
+---
 
-1. **Change JWT Secrets**: Update `JWT_SECRET` and `JWT_REFRESH_SECRET` in `.env` with strong, random values
-2. **Use HTTPS**: Always use HTTPS in production
-3. **Database**: Replace in-memory storage with a proper database (MongoDB, PostgreSQL, etc.)
-4. **Rate Limiting**: Implement rate limiting to prevent brute force attacks
-5. **Input Validation**: Add comprehensive input validation
-6. **CORS**: Configure CORS appropriately for your frontend
-7. **Environment Variables**: Never commit `.env` file to version control
+## Authentication
 
-## Current Limitations
+HTTP-only cookie-based JWT. The frontend must pass `credentials: 'include'` on every request.
 
-- Uses in-memory storage (data is lost on server restart)
-- No password strength validation
-- No email verification
-- No password reset functionality
-- Basic error handling
+| Cookie | Lifetime |
+|--------|----------|
+| `accessToken` | 15 minutes |
+| `refreshToken` | 7 days |
 
-## Next Steps
+When the access token expires the server returns **401** — call `POST /api/auth/refresh` to get a new one silently.
 
-Consider adding:
+---
 
-- Database integration (MongoDB, PostgreSQL)
-- Password strength requirements
-- Email verification
-- Password reset functionality
-- Role-based access control (RBAC)
-- Rate limiting
-- Request logging
-- Unit tests
+## Game Lifecycle & ELO
+
+Games follow a strict state machine:
+
+```
+planned → started → ended → processed
+```
+
+When a game is processed (`PUT /api/games/:id/process`) the API:
+1. Records final scores per participant
+2. Calculates ELO changes using the standard formula (K = 32)
+3. Writes a `historical_elo` record for every participant
+4. A database trigger automatically keeps `users.elo` in sync
+
+Every player starts at **ELO 1000**.
+
+---
+
+## Documentation
+
+| File | Contents |
+|------|----------|
+| [docs/API.md](docs/API.md) | Full endpoint reference with request/response examples |
+| [docs/DATABASE_SETUP.md](docs/DATABASE_SETUP.md) | Local and remote MySQL setup |
+| [docs/LOGGING.md](docs/LOGGING.md) | Logging system deep-dive |
+| [docs/LOGGING_QUICKSTART.md](docs/LOGGING_QUICKSTART.md) | Logging quick-start guide |
+| [docs/API_TESTING.md](docs/API_TESTING.md) | Manual testing guide |
+| [docs/API_CONTRACT.md](docs/API_CONTRACT.md) | API contract definition |
+| [docs/API_IMPROVEMENTS.md](docs/API_IMPROVEMENTS.md) | Planned improvements |

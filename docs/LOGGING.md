@@ -156,7 +156,7 @@ Available custom tokens:
 - `:user-id` - Authenticated user's ID
 - `:user-role` - User's role (admin/user)
 - `:request-id` - Unique request identifier
-- `:response-time-ms` - Response time in milliseconds
+- `:response-time-ms` - Response time in milliseconds (uses `req._hrtimeStart` set by `requestTimer`; deliberately avoids `req._startTime` which Morgan reserves internally as a `Date`)
 - `:error-message` - Error message (for failed requests)
 
 ---
@@ -462,6 +462,14 @@ logger.on('error', (error) => {
 2. Skip successful requests: `HTTP_LOG_SKIP_SUCCESS=true`
 3. Use compact or JSON format: `HTTP_LOG_FORMAT=compact`
 4. Increase log level: `LOG_LEVEL=warn`
+
+### `ERR_INVALID_ARG_TYPE` crash on every request
+
+Symptom: the server crashes with _"The 'time' argument must be an instance of Array. Received an instance of Date"_ originating from `process.hrtime` inside the `response-time-ms` Morgan token.
+
+Cause: Morgan sets `req._startTime` as a `Date` object internally. If `requestTimer` also writes to `req._startTime` (as an `hrtime` array), Morgan's assignment overwrites it, and the token later receives a `Date` instead of the expected `[seconds, nanoseconds]` array.
+
+Fix (already applied): `requestTimer` stores the high-resolution timer under `req._hrtimeStart` instead, which does not conflict with Morgan's internals.
 
 ### Missing Request Details
 

@@ -90,44 +90,54 @@ const getHistoryById = async (gameId, userId) => {
 };
 
 /**
- * Get ELO history for a user
+ * Get ELO history for a user from the historical_elo table
  * @param {number} userId - User ID
- * @returns {Array} Array of ELO ratings over time
+ * @returns {Array} Array of ELO records over time
  */
 const getUserEloHistory = async (userId) => {
-  // For now, return mock ELO data
-  // In a real implementation, you would have an elo_history table
-  const games = await query(
-    `SELECT 
+  // Verify user exists
+  const users = await query("SELECT userID, elo FROM users WHERE userID = ?", [userId]);
+  if (users.length === 0) {
+    const error = new Error("User not found");
+    error.status = 404;
+    throw error;
+  }
+
+  const records = await query(
+    `SELECT
+      h.id,
+      h.elo,
+      h.recorded_at,
       g.gameID,
-      g.endedAt,
-      gp.score
-    FROM games g
-    JOIN game_participants gp ON g.gameID = gp.gameID
-    WHERE gp.userID = ? AND g.status = 'ended'
-    ORDER BY g.endedAt ASC`,
+      g.name   AS gameName,
+      g.status AS gameStatus
+    FROM historical_elo h
+    LEFT JOIN games g ON g.gameID = (
+      SELECT gp.gameID
+      FROM game_participants gp
+      JOIN games g2 ON g2.gameID = gp.gameID
+      WHERE gp.userID = h.userID
+        AND g2.status = 'processed'
+        AND g2.endedAt <= h.recorded_at
+      ORDER BY g2.endedAt DESC
+      LIMIT 1
+    )
+    WHERE h.userID = ?
+    ORDER BY h.recorded_at ASC`,
     [userId],
   );
 
-  // Calculate mock ELO based on game results
-  let currentElo = 1000; // Starting ELO
-  const eloHistory = [{ gameId: null, timestamp: null, elo: currentElo }];
-
-  games.forEach((game) => {
-    // Simple ELO calculation (win = +20, loss = -20)
-    // This is a placeholder - implement proper ELO calculation
-    if (game.score) {
-      currentElo += game.score > 0 ? 20 : -20;
-    }
-
-    eloHistory.push({
-      gameId: game.gameID,
-      timestamp: game.endedAt,
-      elo: currentElo,
-    });
-  });
-
-  return eloHistory;
+  return {
+    userId,
+    currentElo: users[0].elo,
+    history: records.map((r) => ({
+      id: r.id,
+      elo: r.elo,
+      recordedAt: r.recorded_at,
+      gameId: r.gameID || null,
+      gameName: r.gameName || null,
+    })),
+  };
 };
 
 module.exports = {

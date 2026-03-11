@@ -21,7 +21,8 @@ const searchPlayers = async (req, res) => {
 const getPlayerProfile = async (req, res) => {
   try {
     const playerId = parseInt(req.params.id);
-    const player = await authService.getUserById(playerId);
+    const isAdmin = req.user?.role === "admin";
+    const player = await authService.getUserById(playerId, isAdmin);
 
     if (!player) {
       return res.status(404).json({ message: "Player not found" });

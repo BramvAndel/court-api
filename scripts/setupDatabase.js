@@ -20,7 +20,7 @@ async function setupDatabase() {
     console.log("✓ Connected to MySQL server");
 
     // Create database if it doesn't exist
-    const dbName = process.env.DB_NAME || "king_of_court";
+    const dbName = process.env.DB_NAME || "courts_db";
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     console.log(`✓ Database '${dbName}' created/verified`);
 
