@@ -44,6 +44,7 @@ const getAllGames = async () => {
       COUNT(gp.participantID) as signupCount
     FROM games g
     LEFT JOIN game_participants gp ON g.gameID = gp.gameID
+    WHERE g.status = 'planned'
     GROUP BY g.gameID
     ORDER BY g.createdAt DESC
   `);

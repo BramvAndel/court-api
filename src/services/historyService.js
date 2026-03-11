@@ -14,6 +14,11 @@ const getUserHistory = async (userId) => {
     FROM games g
     JOIN game_participants gp ON g.gameID = gp.gameID
     WHERE gp.userID = ?
+      AND (
+        g.status = 'started'
+        OR g.status = 'ended'
+        OR g.status = 'processed'
+      )
     ORDER BY g.createdAt DESC`,
     [userId],
   );
@@ -39,7 +44,7 @@ const getUserHistory = async (userId) => {
  * @param {number} userId - User ID (for authorization)
  * @returns {Object|null} History object or null if not found
  */
-const getHistoryById = async (gameId, userId) => {
+const getHistoryById = async (gameId, userId, isAdmin = false) => {
   // Check if user participated in this game
   const participants = await query(
     "SELECT * FROM game_participants WHERE gameID = ? AND userID = ?",
@@ -79,13 +84,18 @@ const getHistoryById = async (gameId, userId) => {
     status: game.status,
     createdBy: game.createdBy,
     winnerUserId: game.winner_userID,
-    participants: allParticipants.map((p) => ({
-      id: p.participantID,
-      userId: p.userID,
-      username: p.username,
-      email: p.email,
-      score: p.score,
-    })),
+    participants: allParticipants.map((p) => {
+      const participant = {
+        id: p.participantID,
+        userId: p.userID,
+        username: p.username,
+        score: p.score,
+      };
+      if (isAdmin) {
+        participant.email = p.email;
+      }
+      return participant;
+    }),
   };
 };
 
@@ -96,7 +106,9 @@ const getHistoryById = async (gameId, userId) => {
  */
 const getUserEloHistory = async (userId) => {
   // Verify user exists
-  const users = await query("SELECT userID, elo FROM users WHERE userID = ?", [userId]);
+  const users = await query("SELECT userID, elo FROM users WHERE userID = ?", [
+    userId,
+  ]);
   if (users.length === 0) {
     const error = new Error("User not found");
     error.status = 404;

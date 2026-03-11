@@ -6,14 +6,24 @@ const authService = require("../services/authService");
 const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const user = await authService.getUserById(userId);
+    const user = await authService.getUserById(
+      userId,
+      true,
+      req.user && req.user.role === "admin",
+    );
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Users can only view their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
+    const requesterId = parseInt(
+      req.user && (req.user.id || req.user.userID || req.user.ID),
+    );
+    const requesterRole =
+      req.user && req.user.role ? String(req.user.role).toLowerCase() : "";
+
+    if (requesterId !== userId && requesterRole !== "admin") {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -33,7 +43,13 @@ const updateUser = async (req, res) => {
     const userId = parseInt(req.params.id);
 
     // Users can only update their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
+    const requesterId2 = parseInt(
+      req.user && (req.user.id || req.user.userID || req.user.ID),
+    );
+    const requesterRole2 =
+      req.user && req.user.role ? String(req.user.role).toLowerCase() : "";
+
+    if (requesterId2 !== userId && requesterRole2 !== "admin") {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -60,7 +76,13 @@ const deleteUser = async (req, res) => {
     const userId = parseInt(req.params.id);
 
     // Users can only delete their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
+    const requesterId3 = parseInt(
+      req.user && (req.user.id || req.user.userID || req.user.ID),
+    );
+    const requesterRole3 =
+      req.user && req.user.role ? String(req.user.role).toLowerCase() : "";
+
+    if (requesterId3 !== userId && requesterRole3 !== "admin") {
       return res.status(403).json({ message: "Access denied" });
     }
 

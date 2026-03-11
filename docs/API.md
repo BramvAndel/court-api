@@ -162,11 +162,12 @@ No body required - reads the `refreshToken` cookie.
 { "message": "Token refreshed" }
 ```
 
-**401 Unauthorized** - missing or expired refresh token.
+**401 Unauthorized** - refresh token not present in cookies.
+**403 Forbidden** - refresh token is invalid or expired.
 
 ---
 
-### `POST /api/auth/logout` (auth required)
+### `POST /api/auth/logout` (public)
 
 Invalidate the current session.
 
@@ -261,7 +262,7 @@ Update a user's profile.
 Delete a user account.
 
 - **Own ID** - users can delete their own account.
-- **Other ID** - admins can delete any account, except their own.
+- **Other ID** - admins can delete any account.
 
 **200 OK**
 
@@ -269,7 +270,7 @@ Delete a user account.
 { "message": "User deleted successfully" }
 ```
 
-**403 Forbidden** - attempting to delete another user's account as a regular user, or one's own account as an admin.
+**403 Forbidden** - attempting to delete another user's account without admin role.
 **404 Not Found**
 
 ---
@@ -300,7 +301,7 @@ Returns an empty array when no matches are found.
 
 Fetch a public player profile by user ID.
 
-If an admin makes the request, the full profile is returned. If a regular user makes the request, only the `id`, `name`, and `elo` fields are returned.
+If an admin makes the request, the full profile is returned. If a regular user makes the request, only the `id`, `name`, `elo`, and `createdAt` fields are returned.
 
 **200 OK** (regular user)
 
@@ -308,7 +309,8 @@ If an admin makes the request, the full profile is returned. If a regular user m
 {
   "id": 3,
   "name": "bram",
-  "elo": 1024
+  "elo": 1024,
+  "createdAt": "2026-03-11T08:00:00.000Z"
 }
 ```
 
@@ -333,7 +335,9 @@ If an admin makes the request, the full profile is returned. If a regular user m
 
 ### `GET /api/games` (public)
 
-List all games with participant counts.
+List all **planned** games with participant counts.
+
+> This endpoint only returns games with `planned` status.
 
 **200 OK**
 
@@ -394,19 +398,32 @@ Get full game details including all participants.
 
 Create a new game.
 
-**Body**
+**Body** (all fields optional)
 
 ```json
 {
   "name": "Friday Session",
   "description": "Weekly court game",
-  "plannedAt": "2026-03-14T14:00:00.000Z",
-  "startedAt": null,
-  "endedAt": null
+  "plannedAt": "2026-03-14T14:00:00.000Z"
 }
 ```
 
+All fields are optional. `name` defaults to `"Unnamed Game"`.
+
 **201 Created** - returns the created game object.
+
+```json
+{
+  "id": 1,
+  "name": "Friday Session",
+  "description": "Weekly court game",
+  "plannedAt": "2026-03-14T14:00:00.000Z",
+  "startedAt": null,
+  "endedAt": null,
+  "status": "planned",
+  "createdBy": 1
+}
+```
 
 ---
 
@@ -627,34 +644,31 @@ Get the full details of a specific game from the authenticated user's history.
 **200 OK**
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "Friday Session",
-    "description": "Weekly court game",
-    "createdAt": "2026-03-11T08:00:00.000Z",
-    "plannedAt": "2026-03-14T14:00:00.000Z",
-    "startedAt": "2026-03-14T14:05:00.000Z",
-    "endedAt": "2026-03-14T15:00:00.000Z",
-    "status": "processed",
-    "createdBy": 1,
-    "winnerUserId": 3,
-    "participants": [
-      {
-        "id": 5,
-        "userId": 3,
-        "username": "bram",
-        "score": 21
-      },
-      {
-        "id": 6,
-        "userId": 5,
-        "username": "alice",
-        "score": 15
-      }
-    ]
-  }
-]
+{
+  "id": 1,
+  "name": "Friday Session",
+  "description": "Weekly court game",
+  "createdAt": "2026-03-11T08:00:00.000Z",
+  "startedAt": "2026-03-14T14:05:00.000Z",
+  "endedAt": "2026-03-14T15:00:00.000Z",
+  "status": "processed",
+  "createdBy": 1,
+  "winnerUserId": 3,
+  "participants": [
+    {
+      "id": 5,
+      "userId": 3,
+      "username": "bram",
+      "score": 21
+    },
+    {
+      "id": 6,
+      "userId": 5,
+      "username": "alice",
+      "score": 15
+    }
+  ]
+}
 ```
 
 **403 Forbidden** - user was not a participant.
@@ -712,7 +726,7 @@ planned --(start)--> started --(end)--> ended --(process)--> processed
 
 | Transition         | Endpoint                     | Role                   |
 | ------------------ | ---------------------------- | ---------------------- |
-| Create             | `POST /api/games`            | Admin                  |
+| Create             | `POST /api/games/create`     | Admin                  |
 | planned -> started | `PUT /api/games/:id/start`   | Admin                  |
 | started -> ended   | `PUT /api/games/:id/end`     | Admin                  |
 | ended -> processed | `PUT /api/games/:id/process` | Admin                  |
