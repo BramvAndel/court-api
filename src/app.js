@@ -1,5 +1,14 @@
 const express = require("express");
 const cookieParser = require("cookie-parser");
+const { logger } = require("./config/logger");
+const {
+  httpLogger,
+  requestTimer,
+  requestContext,
+  securityLogger,
+  slowRequestLogger,
+  errorLogger,
+} = require("./middleware/logger");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const gameRoutes = require("./routes/games");
@@ -30,6 +39,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Logging and security middleware
+app.use(requestTimer); // Track request timing
+app.use(requestContext); // Add request ID
+app.use(httpLogger); // HTTP request logging
+app.use(securityLogger); // Security event logging
+app.use(slowRequestLogger(2000)); // Log requests slower than 2 seconds
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -47,9 +63,27 @@ app.get("/", (req, res) => {
   res.json({ message: "King of Court API is running" });
 });
 
+// Health check endpoint with detailed status
+app.get("/health", async (req, res) => {
+  const { testConnection } = require("./config/database");
+  const dbConnected = await testConnection();
+
+  const health = {
+    status: dbConnected ? "healthy" : "unhealthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    database: dbConnected ? "connected" : "disconnected",
+  };
+
+  res.status(dbConnected ? 200 : 503).json(health);
+});
+
+// Error logging middleware (logs errors before sending response)
+app.use(errorLogger);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  // Error already logged by errorLogger middleware
   res.status(err.status || 500).json({
     message: err.message || "Internal server error",
   });
