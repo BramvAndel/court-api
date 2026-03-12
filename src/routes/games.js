@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Public routes
 router.get("/", gameController.getAllGames);
-router.get("/:id", gameController.getGameById);
+router.get("/:id", authenticateToken, gameController.getGameById);
 
 // Protected routes
 router.post("/:id/signup", authenticateToken, gameController.signupForGame);

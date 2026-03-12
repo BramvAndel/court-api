@@ -10,14 +10,13 @@ const createGame = async (gameData, creatorId) => {
   const { name, description, plannedAt, startedAt, endedAt, status } = gameData;
 
   const result = await query(
-    "INSERT INTO games (name, description, plannedAt, startedAt, endedAt, status, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO games (name, description, plannedAt, startedAt, endedAt, createdBy) VALUES (?, ?, ?, ?, ?, ?)",
     [
       name || "Unnamed Game",
       description || null,
       plannedAt || null,
       startedAt || null,
       endedAt || null,
-      status || "planned",
       creatorId,
     ],
   );
@@ -40,28 +39,56 @@ const createGame = async (gameData, creatorId) => {
  */
 const getAllGames = async () => {
   const games = await query(`
-    SELECT 
-      g.*,
-      COUNT(gp.participantID) as signupCount
-    FROM games g
-    LEFT JOIN game_participants gp ON g.gameID = gp.gameID
-    GROUP BY g.gameID
-    ORDER BY g.createdAt DESC
+    SELECT * FROM games WHERE status = 'planned' ORDER BY createdAt DESC
   `);
 
-  return games.map((game) => ({
-    id: game.gameID,
-    name: game.name,
-    description: game.description,
-    plannedAt: game.plannedAt,
-    createdAt: game.createdAt,
-    startedAt: game.startedAt,
-    endedAt: game.endedAt,
-    status: game.status,
-    createdBy: game.createdBy,
-    winnerUserId: game.winner_userID,
-    signupCount: game.signupCount,
-  }));
+  if (games.length === 0) return [];
+
+  const gameIds = games.map((g) => g.gameID);
+  const placeholders = gameIds.map(() => "?").join(",");
+  const participants = await query(
+    `SELECT gp.gameID, gp.userID, u.username, u.elo
+     FROM game_participants gp
+     JOIN users u ON gp.userID = u.userID
+     WHERE gp.gameID IN (${placeholders})`,
+    gameIds,
+  );
+
+  const participantsByGame = {};
+  for (const p of participants) {
+    if (!participantsByGame[p.gameID]) participantsByGame[p.gameID] = [];
+    participantsByGame[p.gameID].push({
+      userId: p.userID,
+      username: p.username,
+      elo: p.elo,
+    });
+  }
+
+  return games.map((game) => {
+    const gameParticipants = participantsByGame[game.gameID] || [];
+    const averageElo =
+      gameParticipants.length > 0
+        ? Math.round(
+            gameParticipants.reduce((sum, p) => sum + p.elo, 0) /
+              gameParticipants.length,
+          )
+        : null;
+
+    return {
+      id: game.gameID,
+      name: game.name,
+      description: game.description,
+      plannedAt: game.plannedAt,
+      createdAt: game.createdAt,
+      startedAt: game.startedAt,
+      endedAt: game.endedAt,
+      status: game.status,
+      createdBy: game.createdBy,
+      winnerUserId: game.winner_userID,
+      signupCount: gameParticipants.length,
+      averageElo,
+    };
+  });
 };
 
 /**
@@ -80,7 +107,7 @@ const getGameById = async (gameId) => {
 
   // Get participants
   const participants = await query(
-    `SELECT gp.participantID, gp.userID, gp.score, u.username
+    `SELECT gp.participantID, gp.userID, u.elo, u.username
      FROM game_participants gp
      JOIN users u ON gp.userID = u.userID
      WHERE gp.gameID = ?`,
@@ -102,7 +129,7 @@ const getGameById = async (gameId) => {
       id: p.participantID,
       userId: p.userID,
       username: p.username,
-      score: p.score,
+      elo: p.elo,
     })),
   };
 };
@@ -164,7 +191,7 @@ const calculateElo = (ratingA, ratingB, scoreA, K = 32) => {
   const expectedB = 1 - expectedA;
   return {
     newA: Math.round(ratingA + K * (scoreA - expectedA)),
-    newB: Math.round(ratingB + K * ((1 - scoreA) - expectedB)),
+    newB: Math.round(ratingB + K * (1 - scoreA - expectedB)),
   };
 };
 
@@ -181,7 +208,9 @@ const startGame = async (gameId) => {
     throw error;
   }
   if (games[0].status !== "planned") {
-    const error = new Error(`Game cannot be started from status '${games[0].status}'`);
+    const error = new Error(
+      `Game cannot be started from status '${games[0].status}'`,
+    );
     error.status = 409;
     throw error;
   }
@@ -191,7 +220,9 @@ const startGame = async (gameId) => {
     [gameId],
   );
 
-  return { ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0] };
+  return {
+    ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
+  };
 };
 
 /**
@@ -207,7 +238,9 @@ const endGame = async (gameId) => {
     throw error;
   }
   if (games[0].status !== "started") {
-    const error = new Error(`Game cannot be ended from status '${games[0].status}'`);
+    const error = new Error(
+      `Game cannot be ended from status '${games[0].status}'`,
+    );
     error.status = 409;
     throw error;
   }
@@ -217,7 +250,9 @@ const endGame = async (gameId) => {
     [gameId],
   );
 
-  return { ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0] };
+  return {
+    ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
+  };
 };
 
 /**
@@ -232,10 +267,9 @@ const endGame = async (gameId) => {
 const processGame = async (gameId, winnerId, scores) => {
   return transaction(async (conn) => {
     // 1. Validate game state
-    const [game] = await conn.execute(
-      "SELECT * FROM games WHERE gameID = ?",
-      [gameId],
-    );
+    const [game] = await conn.execute("SELECT * FROM games WHERE gameID = ?", [
+      gameId,
+    ]);
     if (game.length === 0) {
       const error = new Error("Game not found");
       error.status = 404;
@@ -259,7 +293,9 @@ const processGame = async (gameId, winnerId, scores) => {
     );
 
     if (participants.length < 2) {
-      const error = new Error("A game needs at least 2 participants to process");
+      const error = new Error(
+        "A game needs at least 2 participants to process",
+      );
       error.status = 422;
       throw error;
     }
@@ -283,8 +319,12 @@ const processGame = async (gameId, winnerId, scores) => {
     // 5. Calculate ELO changes
     // Winner is paired against every other participant; losers are only
     // paired against the winner (standard multi-player ELO approach).
-    const eloMap = Object.fromEntries(participants.map((p) => [p.userID, p.elo]));
-    const eloChanges = Object.fromEntries(participants.map((p) => [p.userID, 0]));
+    const eloMap = Object.fromEntries(
+      participants.map((p) => [p.userID, p.elo]),
+    );
+    const eloChanges = Object.fromEntries(
+      participants.map((p) => [p.userID, 0]),
+    );
 
     const losers = participants.filter((p) => p.userID !== winnerId);
     for (const loser of losers) {

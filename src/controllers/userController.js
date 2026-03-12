@@ -29,6 +29,11 @@ const getUserById = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Users can only view their own profile unless admin
+    if (req.user.id !== userId && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     res.json(user);
   } catch (error) {
     res
@@ -81,7 +86,6 @@ const deleteUser = async (req, res) => {
 };
 
 module.exports = {
-  getAllUsers,
   getUserById,
   updateUser,
   deleteUser,

@@ -20,7 +20,8 @@ const getUserHistory = async (req, res) => {
 const getHistoryById = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const entry = await historyService.getHistoryById(gameId, req.user.id);
+    const isAdmin = req.user.role === "admin";
+    const entry = await historyService.getHistoryById(gameId, req.user.id, isAdmin);
 
     if (!entry) {
       return res.status(404).json({ message: "History entry not found" });
