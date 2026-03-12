@@ -36,7 +36,22 @@ const getPlayerProfile = async (req, res) => {
   }
 };
 
+/**
+ * Get leaderboard - top 50 players by ELO
+ */
+const getLeaderboard = async (req, res) => {
+  try {
+    const leaderboard = await userService.getLeaderboard();
+    res.json(leaderboard);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch leaderboard" });
+  }
+};
+
 module.exports = {
   searchPlayers,
   getPlayerProfile,
+  getLeaderboard,
 };
