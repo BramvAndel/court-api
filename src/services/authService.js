@@ -69,10 +69,9 @@ const loginUser = async (email, password) => {
     throw error;
   }
 
-  // Generate tokens (normalize DB user -> token payload)
-  const tokenPayload = { id: user.userID, email: user.email, role: user.role };
-  const accessToken = generateAccessToken(tokenPayload);
-  const refreshToken = generateRefreshToken(tokenPayload);
+  // Generate tokens
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
 
   // Store refresh token in database
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -153,7 +152,7 @@ const logoutUser = async (refreshToken) => {
  */
 const getUserById = async (userId, isSelf = false, isAdmin = false) => {
   const users = await query(
-    "SELECT userID, username, email, role, elo, created_at FROM users WHERE userID = ?",
+    "SELECT userID, username, email, role, elo, phone_number, created_at FROM users WHERE userID = ?",
     [userId],
   );
 
@@ -166,6 +165,7 @@ const getUserById = async (userId, isSelf = false, isAdmin = false) => {
     id: user.userID,
     name: user.username,
     elo: user.elo,
+    phone_number: user.phone_number,
     createdAt: user.created_at,
   };
 
@@ -225,7 +225,7 @@ const deleteUser = async (userId) => {
  */
 const getAllUsers = async () => {
   const users = await query(
-    "SELECT userID, username, email, role, elo, created_at FROM users",
+    "SELECT userID, username, email, role, elo, phone_number, created_at FROM users",
   );
 
   return users.map((user) => ({
@@ -234,6 +234,7 @@ const getAllUsers = async () => {
     name: user.username,
     role: user.role,
     elo: user.elo,
+    phone_number: user.phone_number,
     createdAt: user.created_at,
   }));
 };
@@ -245,7 +246,7 @@ const getAllUsers = async () => {
  */
 const searchUsersByUsername = async (searchTerm) => {
   const users = await query(
-    "SELECT userID, username, elo FROM users WHERE username LIKE ?",
+    "SELECT userID, username, elo, phone_number FROM users WHERE username LIKE ?",
     [`%${searchTerm}%`],
   );
 
@@ -253,6 +254,7 @@ const searchUsersByUsername = async (searchTerm) => {
     id: user.userID,
     name: user.username,
     elo: user.elo,
+    phone_number: user.phone_number,
   }));
 };
 
