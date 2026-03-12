@@ -1,20 +1,37 @@
 const authService = require("../services/authService");
 
 /**
+ * Get all users (admin only)
+ */
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await authService.getAllUsers();
+    res.json(users);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch users" });
+  }
+};
+
+/**
  * Get user by ID
  */
 const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const user = await authService.getUserById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
+    
     // Users can only view their own profile unless admin
     if (req.user.id !== userId && req.user.role !== "admin") {
       return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Pass isAdmin flag to get full user details if viewing own profile or if admin
+    const isAdmin = req.user.role === "admin" || req.user.id === userId;
+    const user = await authService.getUserById(userId, isAdmin);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
 
     res.json(user);
@@ -79,6 +96,7 @@ const deleteUser = async (req, res) => {
 };
 
 module.exports = {
+  getAllUsers,
   getUserById,
   updateUser,
   deleteUser,

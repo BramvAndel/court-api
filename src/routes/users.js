@@ -1,7 +1,7 @@
 const express = require("express");
 const userController = require("../controllers/userController");
 const authController = require("../controllers/authController");
-const { authenticateToken } = require("../middleware/auth");
+const { authenticateToken, authenticateAdmin } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -9,6 +9,7 @@ const router = express.Router();
 router.post("/", authController.register); // POST /users (register)
 
 // Protected routes
+router.get("/", authenticateToken, authenticateAdmin, userController.getAllUsers);
 router.get("/:id", authenticateToken, userController.getUserById);
 router.put("/:id", authenticateToken, userController.updateUser);
 router.delete("/:id", authenticateToken, userController.deleteUser);
