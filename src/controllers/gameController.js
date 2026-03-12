@@ -67,6 +67,56 @@ const signupForGame = async (req, res) => {
 };
 
 /**
+ * Sign up another user for a game (admin only)
+ */
+const signupUserForGame = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    const userId = parseInt(req.params.userId);
+    const signup = await gameService.signupForGame(gameId, userId);
+
+    res.json({ message: "Signed up", signup });
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to sign up user for game" });
+  }
+};
+
+/**
+ * Leave a game (remove authenticated user from game)
+ */
+const leaveGame = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    await gameService.leaveGame(gameId, req.user.id);
+
+    res.json({ message: "Left game" });
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to leave game" });
+  }
+};
+
+/**
+ * Remove a specific user from a game (admin only)
+ */
+const removeUserFromGame = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    const userId = parseInt(req.params.userId);
+    await gameService.leaveGame(gameId, userId);
+
+    res.json({ message: "Left game" });
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to remove user from game" });
+  }
+};
+
+/**
  * Start a game (admin only) — moves status from 'planned' to 'started'
  */
 const startGame = async (req, res) => {
@@ -126,6 +176,9 @@ module.exports = {
   getGameById,
   createGame,
   signupForGame,
+  signupUserForGame,
+  leaveGame,
+  removeUserFromGame,
   startGame,
   endGame,
   processGame,

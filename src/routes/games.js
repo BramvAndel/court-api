@@ -8,8 +8,9 @@ const router = express.Router();
 router.get("/", gameController.getAllGames);
 router.get("/:id", authenticateToken, gameController.getGameById);
 
-// Protected routes
+// Protected routes (authenticated users)
 router.post("/:id/signup", authenticateToken, gameController.signupForGame);
+router.post("/:id/leave", authenticateToken, gameController.leaveGame);
 
 // Admin routes
 router.post(
@@ -17,6 +18,18 @@ router.post(
   authenticateToken,
   authenticateAdmin,
   gameController.createGame,
+);
+router.post(
+  "/:id/signup/:userId",
+  authenticateToken,
+  authenticateAdmin,
+  gameController.signupUserForGame,
+);
+router.post(
+  "/:id/leave/:userId",
+  authenticateToken,
+  authenticateAdmin,
+  gameController.removeUserFromGame,
 );
 router.put(
   "/:id/start",

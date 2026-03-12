@@ -176,6 +176,40 @@ const signupForGame = async (gameId, userId) => {
 };
 
 /**
+ * Remove a user from a game
+ * @param {number} gameId - Game ID
+ * @param {number} userId - User ID
+ * @throws {Error} If not signed up or game not found
+ */
+const leaveGame = async (gameId, userId) => {
+  // Check if game exists
+  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+
+  if (games.length === 0) {
+    const error = new Error("Game not found");
+    error.status = 404;
+    throw error;
+  }
+
+  // Check if user is signed up
+  const existingSignups = await query(
+    "SELECT * FROM game_participants WHERE gameID = ? AND userID = ?",
+    [gameId, userId],
+  );
+
+  if (existingSignups.length === 0) {
+    const error = new Error("User is not signed up for this game");
+    error.status = 409;
+    throw error;
+  }
+
+  await query("DELETE FROM game_participants WHERE gameID = ? AND userID = ?", [
+    gameId,
+    userId,
+  ]);
+};
+
+/**
  * Calculate new ELO ratings using the standard ELO formula.
  * In a multi-player context the winner is paired against every other
  * participant; each loser is paired against the winner only.
@@ -376,6 +410,7 @@ module.exports = {
   getAllGames,
   getGameById,
   signupForGame,
+  leaveGame,
   startGame,
   endGame,
   processGame,
