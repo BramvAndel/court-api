@@ -114,10 +114,28 @@ const searchUsersByUsername = async (searchTerm) => {
   }));
 };
 
+/**
+ * Get leaderboard - top 50 players by ELO
+ * @returns {Array} Array of top players with rank
+ */
+const getLeaderboard = async () => {
+  const users = await query(
+    "SELECT userID, username, elo FROM users ORDER BY elo DESC, username ASC LIMIT 50",
+  );
+
+  return users.map((user, index) => ({
+    id: user.userID,
+    rank: index + 1,
+    name: user.username,
+    elo: user.elo,
+  }));
+};
+
 module.exports = {
   getUserById,
   updateUser,
   deleteUser,
   getAllUsers,
   searchUsersByUsername,
+  getLeaderboard,
 };
