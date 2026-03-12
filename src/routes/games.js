@@ -13,7 +13,7 @@ router.post("/:id/signup", authenticateToken, gameController.signupForGame);
 
 // Admin routes
 router.post(
-  "/",
+  "/create",
   authenticateToken,
   authenticateAdmin,
   gameController.createGame,
