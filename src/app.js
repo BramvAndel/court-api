@@ -9,6 +9,7 @@ const {
   slowRequestLogger,
   errorLogger,
 } = require("./middleware/logger");
+const { generalLimiter } = require("./middleware/rateLimiter");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const gameRoutes = require("./routes/games");
@@ -50,6 +51,9 @@ app.use(slowRequestLogger(2000)); // Log requests slower than 2 seconds
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Rate limiting
+app.use("/api/", generalLimiter);
 
 // Routes
 app.use("/api/auth", authRoutes);
