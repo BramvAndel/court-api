@@ -21,17 +21,16 @@ const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    // Pass isAdmin flag to get full user details if viewing own profile or if admin
-    const isAdmin = req.user.role === "admin" || req.user.id === userId;
-    const user = await userService.getUserById(userId, isAdmin);
+    // Authorization check first - users can only view their own profile unless admin
+    if (req.user.id !== userId && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Pass true to get full user details since we've verified authorization
+    const user = await userService.getUserById(userId, true);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
-    }
-
-    // Users can only view their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
     }
 
     res.json(user);

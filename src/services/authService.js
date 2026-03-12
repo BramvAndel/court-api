@@ -69,9 +69,15 @@ const loginUser = async (email, password) => {
     throw error;
   }
 
-  // Generate tokens
-  const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken(user);
+  // Generate tokens with properly formatted user object
+  const userPayload = {
+    id: user.userID,
+    email: user.email,
+    role: user.role,
+  };
+
+  const accessToken = generateAccessToken(userPayload);
+  const refreshToken = generateRefreshToken(userPayload);
 
   // Store refresh token in database
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
