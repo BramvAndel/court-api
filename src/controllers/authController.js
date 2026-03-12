@@ -1,4 +1,5 @@
 const authService = require("../services/authService");
+const userService = require("../services/userService");
 
 /**
  * Register a new user
@@ -118,7 +119,7 @@ const logout = async (req, res) => {
  */
 const getProfile = async (req, res) => {
   try {
-    const user = await authService.getUserById(req.user.id);
+    const user = await userService.getUserById(req.user.id, true);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });

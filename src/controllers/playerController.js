@@ -1,4 +1,4 @@
-const authService = require("../services/authService");
+const userService = require("../services/userService");
 
 /**
  * Search for players by username
@@ -6,7 +6,7 @@ const authService = require("../services/authService");
 const searchPlayers = async (req, res) => {
   try {
     const username = req.params.username;
-    const players = await authService.searchUsersByUsername(username);
+    const players = await userService.searchUsersByUsername(username);
     res.json(players);
   } catch (error) {
     res
@@ -22,7 +22,7 @@ const getPlayerProfile = async (req, res) => {
   try {
     const playerId = parseInt(req.params.id);
     const isAdmin = req.user?.role === "admin";
-    const player = await authService.getUserById(playerId, isAdmin);
+    const player = await userService.getUserById(playerId, isAdmin);
 
     if (!player) {
       return res.status(404).json({ message: "Player not found" });
