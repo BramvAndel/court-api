@@ -1,4 +1,18 @@
-const authService = require("../services/authService");
+const userService = require("../services/userService");
+
+/**
+ * Get all users (admin only)
+ */
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await userService.getAllUsers();
+    res.json(users);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch users" });
+  }
+};
 
 /**
  * Get user by ID
@@ -6,7 +20,10 @@ const authService = require("../services/authService");
 const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const user = await authService.getUserById(userId);
+    
+    // Pass isAdmin flag to get full user details if viewing own profile or if admin
+    const isAdmin = req.user.role === "admin" || req.user.id === userId;
+    const user = await userService.getUserById(userId, isAdmin);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -32,13 +49,8 @@ const updateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    // Users can only update their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
     const updates = req.body;
-    const user = await authService.updateUser(userId, updates);
+    const user = await userService.updateUser(userId, updates);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -59,12 +71,7 @@ const deleteUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    // Users can only delete their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    const success = await authService.deleteUser(userId);
+    const success = await userService.deleteUser(userId);
 
     if (!success) {
       return res.status(404).json({ message: "User not found" });

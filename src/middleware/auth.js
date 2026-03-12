@@ -31,4 +31,23 @@ const authenticateAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticateToken, authenticateAdmin };
+/**
+ * Middleware to check if user is owner of resource or admin
+ * @param {string} paramName - The parameter name to check (defaults to 'id')
+ * @returns {Function} Express middleware function
+ */
+const ownerOrAdmin = (paramName = "id") => {
+  return (req, res, next) => {
+    const resourceId = parseInt(req.params[paramName]);
+    const userId = req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (isAdmin || userId === resourceId) {
+      next();
+    } else {
+      return res.status(403).json({ message: "Access denied" });
+    }
+  };
+};
+
+module.exports = { authenticateToken, authenticateAdmin, ownerOrAdmin };
