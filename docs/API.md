@@ -329,6 +329,31 @@ If an admin makes the request, the full profile is returned. If a regular user m
 
 **404 Not Found**
 
+### `GET /api/player/leaderboard` (public)
+
+Fetch the top 50 players based on their ELO ratings.
+
+**200 OK**
+
+` ` `json
+[
+  {
+    "id": 3,
+    "rank": 1,
+    "name": "bram",
+    "elo": 1024
+  },
+  {
+    "id": 5,
+    "rank": 2,
+    "name": "alice",
+    "elo": 980
+  }
+]
+` ` `
+
+Returns an empty array if no players are found.
+
 ---
 
 ## Games `/api/games/*`
