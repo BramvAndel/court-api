@@ -1,10 +1,19 @@
 const express = require("express");
 const playerController = require("../controllers/playerController");
+const { authenticateToken } = require("../middleware/auth");
 
 const router = express.Router();
 
 // Public routes
-router.get("/search/:username", playerController.searchPlayers);
-router.get("/profile/:id", playerController.getPlayerProfile);
+router.get(
+  "/search/:username",
+  authenticateToken,
+  playerController.searchPlayers,
+);
+router.get(
+  "/profile/:id",
+  authenticateToken,
+  playerController.getPlayerProfile,
+);
 
 module.exports = router;

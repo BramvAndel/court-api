@@ -146,10 +146,11 @@ const logoutUser = async (refreshToken) => {
 /**
  * Get user by ID
  * @param {number} userId - User ID
+ * @param {boolean} isSelf - Whether the requester is the user themselves
  * @param {boolean} isAdmin - Whether the requester is an admin
  * @returns {Object|null} User object without password
  */
-const getUserById = async (userId, isAdmin = false) => {
+const getUserById = async (userId, isSelf = false, isAdmin = false) => {
   const users = await query(
     "SELECT userID, username, email, role, elo, phone_number, created_at FROM users WHERE userID = ?",
     [userId],
@@ -168,7 +169,7 @@ const getUserById = async (userId, isAdmin = false) => {
     createdAt: user.created_at,
   };
 
-  if (isAdmin) {
+  if (isAdmin || isSelf) {
     profile.email = user.email;
     profile.role = user.role;
   }
