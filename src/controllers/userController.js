@@ -20,7 +20,7 @@ const getAllUsers = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    
+
     // Pass isAdmin flag to get full user details if viewing own profile or if admin
     const isAdmin = req.user.role === "admin" || req.user.id === userId;
     const user = await userService.getUserById(userId, isAdmin);
@@ -86,6 +86,7 @@ const deleteUser = async (req, res) => {
 };
 
 module.exports = {
+  getAllUsers,
   getUserById,
   updateUser,
   deleteUser,
