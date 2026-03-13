@@ -732,12 +732,10 @@ Returns `{ "userId": n, "currentElo": 1000, "history": [] }` when no games have 
 
 Get the ELO history for any user.
 
-- **Own ID** - accessible to the user.
-- **Other ID** - admin required role.
+- Any authenticated user can request this endpoint.
 
 **200 OK** - same shape as `GET /api/history/elo`.
 
-**403 Forbidden** - non-admin requesting another user's history.
 **404 Not Found** - user does not exist.
 
 ---
