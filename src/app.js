@@ -10,6 +10,7 @@ const {
   errorLogger,
 } = require("./middleware/logger");
 const { generalLimiter } = require("./middleware/rateLimiter");
+const { validateAndSanitizeInput } = require("./middleware/inputValidation");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const gameRoutes = require("./routes/games");
@@ -51,6 +52,7 @@ app.use(slowRequestLogger(2000)); // Log requests slower than 2 seconds
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(validateAndSanitizeInput);
 
 // Rate limiting
 app.use("/api/", generalLimiter);
@@ -91,6 +93,12 @@ app.use(errorLogger);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  if (err instanceof URIError) {
+    return res.status(400).json({
+      message: "Malformed URL or query input",
+    });
+  }
+
   // Error already logged by errorLogger middleware
   res.status(err.status || 500).json({
     message: err.message || "Internal server error",
