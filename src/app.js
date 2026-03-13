@@ -21,7 +21,10 @@ const app = express();
 
 // CORS configuration for frontend
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: [
+    process.env.FRONTEND_URL || "http://localhost:5173",
+    process.env.BACKEND_URL || "http://localhost:3000"
+  ],
   credentials: true, // Allow cookies
   optionsSuccessStatus: 200,
 };
