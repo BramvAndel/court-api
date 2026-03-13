@@ -20,18 +20,17 @@ const playerRoutes = require("./routes/player");
 const app = express();
 
 // CORS configuration for frontend
-const corsOptions = {
-  origin: [
-    process.env.FRONTEND_URL || "http://localhost:5173",
-    process.env.BACKEND_URL || "http://localhost:3000"
-  ],
-  credentials: true, // Allow cookies
-  optionsSuccessStatus: 200,
-};
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:5173",
+  process.env.BACKEND_URL || "http://localhost:3000",
+];
 
-// Apply CORS manually
+// Apply CORS manually — reflect the request origin if it is in the allow-list
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", corsOptions.origin);
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
