@@ -1,6 +1,7 @@
 const express = require("express");
 const playerController = require("../controllers/playerController");
 const { authenticateToken } = require("../middleware/auth");
+const { validateRequest, commonSchemas } = require("../middleware/inputValidation");
 
 const router = express.Router();
 
@@ -11,11 +12,13 @@ router.get("/leaderboard", playerController.getLeaderboard);
 router.get(
   "/search/:username",
   authenticateToken,
+  validateRequest(commonSchemas.usernameParam),
   playerController.searchPlayers,
 );
 router.get(
   "/profile/:id",
   authenticateToken,
+  validateRequest(commonSchemas.idParam),
   playerController.getPlayerProfile,
 );
 
