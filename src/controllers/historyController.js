@@ -50,16 +50,11 @@ const getUserEloHistory = async (req, res) => {
 };
 
 /**
- * Get ELO history for a specific player (self or admin)
+ * Get ELO history for a specific player (any authenticated user)
  */
 const getPlayerEloHistory = async (req, res) => {
   try {
     const targetId = parseInt(req.params.userId);
-
-    // Users can only view their own ELO; admins can view anyone's
-    if (req.user.role !== "admin" && req.user.id !== targetId) {
-      return res.status(403).json({ message: "Access denied" });
-    }
 
     const eloHistory = await historyService.getUserEloHistory(targetId);
     res.json(eloHistory);
