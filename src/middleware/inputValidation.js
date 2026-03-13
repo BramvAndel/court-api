@@ -274,7 +274,7 @@ const commonSchemas = {
         maxLength: 255,
         pattern: EMAIL_REGEX,
       },
-      password: { type: "string", required: true, minLength: 8, maxLength: 128 },
+      password: { type: "string", required: true, minLength: 6, maxLength: 128 },
       username: {
         type: "string",
         required: false,
@@ -292,7 +292,7 @@ const commonSchemas = {
         maxLength: 255,
         pattern: EMAIL_REGEX,
       },
-      password: { type: "string", required: true, minLength: 8, maxLength: 128 },
+      password: { type: "string", required: true, minLength: 6, maxLength: 128 },
     },
   },
   updateUser: {
