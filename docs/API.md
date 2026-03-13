@@ -210,6 +210,41 @@ See [Auth -> Register](#post-apiauthregister).
 
 ---
 
+### `GET /api/users` (admin required)
+
+Fetch all users.
+
+Requires an authenticated user with `admin` role.
+
+**200 OK**
+
+```json
+[
+  {
+    "id": 1,
+    "email": "admin@example.com",
+    "name": "admin",
+    "role": "admin",
+    "elo": 1200,
+    "phone_number": "+31 6 12345678",
+    "createdAt": "2026-03-11T08:00:00.000Z"
+  },
+  {
+    "id": 3,
+    "email": "user@example.com",
+    "name": "username",
+    "role": "user",
+    "elo": 1024,
+    "phone_number": null,
+    "createdAt": "2026-03-11T08:00:00.000Z"
+  }
+]
+```
+
+**403 Forbidden** - authenticated user is not an admin.
+
+---
+
 ### `GET /api/users/:id` (auth required)
 
 Fetch a user by ID.
