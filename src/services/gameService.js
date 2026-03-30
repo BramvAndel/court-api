@@ -1,6 +1,114 @@
 const { query, transaction } = require("../config/database");
 
 /**
+ * Build a round-robin schedule for the provided participants.
+ * Assigns fields per round starting at 1.
+ *
+ * @param {Array<{userId: number, username: string}>} participants
+ * @returns {{ rounds: Array, playerRounds: Array }}
+ */
+const buildRoundRobinSchedule = (participants) => {
+  if (!Array.isArray(participants) || participants.length === 0) {
+    return { rounds: [], playerRounds: [] };
+  }
+
+  const roster = [...participants]
+    .sort((a, b) => a.userId - b.userId)
+    .map((p) => ({ userId: p.userId, username: p.username }));
+
+  const working = [...roster];
+  if (working.length % 2 !== 0) {
+    working.push(null);
+  }
+
+  const total = working.length;
+  const rounds = [];
+
+  for (let roundNumber = 1; roundNumber <= total - 1; roundNumber++) {
+    const matches = [];
+    const byes = [];
+    let fieldNumber = 1;
+
+    for (let i = 0; i < total / 2; i++) {
+      const playerA = working[i];
+      const playerB = working[total - 1 - i];
+
+      if (!playerA && !playerB) {
+        continue;
+      }
+
+      if (!playerA || !playerB) {
+        byes.push(playerA || playerB);
+        continue;
+      }
+
+      matches.push({
+        field: fieldNumber,
+        playerA,
+        playerB,
+      });
+      fieldNumber += 1;
+    }
+
+    rounds.push({
+      round: roundNumber,
+      matches,
+      byes,
+    });
+
+    const rotated = [
+      working[0],
+      working[total - 1],
+      ...working.slice(1, total - 1),
+    ];
+    for (let index = 0; index < total; index++) {
+      working[index] = rotated[index];
+    }
+  }
+
+  const playerRounds = roster.map((player) => {
+    const roundsForPlayer = rounds.map((round) => {
+      const match = round.matches.find(
+        (m) =>
+          m.playerA.userId === player.userId ||
+          m.playerB.userId === player.userId,
+      );
+
+      if (match) {
+        const opponent =
+          match.playerA.userId === player.userId
+            ? match.playerB
+            : match.playerA;
+        return {
+          round: round.round,
+          opponent,
+          field: match.field,
+          isBye: false,
+        };
+      }
+
+      const hasBye = round.byes.some(
+        (byePlayer) => byePlayer.userId === player.userId,
+      );
+      return {
+        round: round.round,
+        opponent: null,
+        field: null,
+        isBye: hasBye,
+      };
+    });
+
+    return {
+      userId: player.userId,
+      username: player.username,
+      rounds: roundsForPlayer,
+    };
+  });
+
+  return { rounds, playerRounds };
+};
+
+/**
  * Create a new game
  * @param {Object} gameData - Game data
  * @param {number} creatorId - ID of the user creating the game
@@ -114,6 +222,13 @@ const getGameById = async (gameId) => {
     [gameId],
   );
 
+  const participantData = participants.map((p) => ({
+    id: p.participantID,
+    userId: p.userID,
+    username: p.username,
+    elo: p.elo,
+  }));
+
   return {
     id: game.gameID,
     name: game.name,
@@ -125,12 +240,30 @@ const getGameById = async (gameId) => {
     status: game.status,
     createdBy: game.createdBy,
     winnerUserId: game.winner_userID,
-    participants: participants.map((p) => ({
-      id: p.participantID,
-      userId: p.userID,
-      username: p.username,
-      elo: p.elo,
-    })),
+    participants: participantData,
+    schedule: buildRoundRobinSchedule(participantData),
+  };
+};
+
+/**
+ * Get schedule for a game with rounds, opponents and fields.
+ * @param {number} gameId - Game ID
+ * @returns {Object|null} Schedule object or null if game not found
+ */
+const getGameSchedule = async (gameId) => {
+  const game = await getGameById(gameId);
+
+  if (!game) {
+    return null;
+  }
+
+  return {
+    gameId: game.id,
+    name: game.name,
+    status: game.status,
+    participantCount: game.participants.length,
+    rounds: game.schedule.rounds,
+    playerRounds: game.schedule.playerRounds,
   };
 };
 
@@ -409,6 +542,7 @@ module.exports = {
   createGame,
   getAllGames,
   getGameById,
+  getGameSchedule,
   signupForGame,
   leaveGame,
   startGame,

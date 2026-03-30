@@ -1,7 +1,10 @@
 const express = require("express");
 const gameController = require("../controllers/gameController");
 const { authenticateToken, authenticateAdmin } = require("../middleware/auth");
-const { validateRequest, commonSchemas } = require("../middleware/inputValidation");
+const {
+  validateRequest,
+  commonSchemas,
+} = require("../middleware/inputValidation");
 
 const router = express.Router();
 
@@ -12,6 +15,12 @@ router.get(
   authenticateToken,
   validateRequest(commonSchemas.idParam),
   gameController.getGameById,
+);
+router.get(
+  "/:id/schedule",
+  authenticateToken,
+  validateRequest(commonSchemas.idParam),
+  gameController.getGameSchedule,
 );
 
 // Protected routes (authenticated users)

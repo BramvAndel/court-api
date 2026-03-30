@@ -424,7 +424,7 @@ List all **planned** games with signup count and average elo.
 
 ### `GET /api/games/:id` (auth required)
 
-Get full game details including all participants and their elo ratings.
+Get full game details including all participants, round matchups, and field assignments.
 
 **200 OK**
 
@@ -446,6 +446,86 @@ Get full game details including all participants and their elo ratings.
       "userId": 3,
       "username": "bram",
       "elo": 1050
+    }
+  ],
+  "schedule": {
+    "rounds": [
+      {
+        "round": 1,
+        "matches": [
+          {
+            "field": 1,
+            "playerA": { "userId": 3, "username": "bram" },
+            "playerB": { "userId": 5, "username": "sara" }
+          }
+        ],
+        "byes": []
+      }
+    ],
+    "playerRounds": [
+      {
+        "userId": 3,
+        "username": "bram",
+        "rounds": [
+          {
+            "round": 1,
+            "opponent": { "userId": 5, "username": "sara" },
+            "field": 1,
+            "isBye": false
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**404 Not Found**
+
+---
+
+### `GET /api/games/:id/schedule` (auth required)
+
+Get only the schedule view for a game: rounds, opponents, and field assignments.
+
+**200 OK**
+
+```json
+{
+  "gameId": 1,
+  "name": "Friday Session",
+  "status": "started",
+  "participantCount": 4,
+  "rounds": [
+    {
+      "round": 1,
+      "matches": [
+        {
+          "field": 1,
+          "playerA": { "userId": 3, "username": "bram" },
+          "playerB": { "userId": 5, "username": "sara" }
+        },
+        {
+          "field": 2,
+          "playerA": { "userId": 7, "username": "mike" },
+          "playerB": { "userId": 9, "username": "nina" }
+        }
+      ],
+      "byes": []
+    }
+  ],
+  "playerRounds": [
+    {
+      "userId": 3,
+      "username": "bram",
+      "rounds": [
+        {
+          "round": 1,
+          "opponent": { "userId": 5, "username": "sara" },
+          "field": 1,
+          "isBye": false
+        }
+      ]
     }
   ]
 }

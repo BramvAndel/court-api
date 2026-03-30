@@ -35,6 +35,26 @@ const getGameById = async (req, res) => {
 };
 
 /**
+ * Get game schedule with rounds, opponents and fields
+ */
+const getGameSchedule = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    const schedule = await gameService.getGameSchedule(gameId);
+
+    if (!schedule) {
+      return res.status(404).json({ message: "Game not found" });
+    }
+
+    res.json(schedule);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch game schedule" });
+  }
+};
+
+/**
  * Create a new game (admin only)
  */
 const createGame = async (req, res) => {
@@ -174,6 +194,7 @@ const processGame = async (req, res) => {
 module.exports = {
   getAllGames,
   getGameById,
+  getGameSchedule,
   createGame,
   signupForGame,
   signupUserForGame,

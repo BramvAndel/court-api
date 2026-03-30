@@ -16,6 +16,13 @@ const authenticateToken = (req, res, next) => {
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
+    // Validate that token has required fields (handles old tokens)
+    if (!user.id || !user.email || !user.role) {
+      return res.status(401).json({ 
+        message: "Invalid token format. Please log in again." 
+      });
+    }
+
     req.user = user;
     next();
   });
