@@ -83,7 +83,7 @@ const buildRoundRobinSchedule = (participants) => {
           round: round.round,
           opponent,
           field: match.field,
-          isBye: false,
+          isSittingOut: false,
         };
       }
 
