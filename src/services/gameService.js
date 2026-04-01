@@ -26,7 +26,7 @@ const buildRoundRobinSchedule = (participants) => {
 
   for (let roundNumber = 1; roundNumber <= total - 1; roundNumber++) {
     const matches = [];
-    const byes = [];
+    const sittingOut = [];
     let fieldNumber = 1;
 
     for (let i = 0; i < total / 2; i++) {
@@ -38,7 +38,7 @@ const buildRoundRobinSchedule = (participants) => {
       }
 
       if (!playerA || !playerB) {
-        byes.push(playerA || playerB);
+        sittingOut.push(playerA || playerB);
         continue;
       }
 
@@ -53,7 +53,7 @@ const buildRoundRobinSchedule = (participants) => {
     rounds.push({
       round: roundNumber,
       matches,
-      byes,
+      sittingOut,
     });
 
     const rotated = [
@@ -87,14 +87,14 @@ const buildRoundRobinSchedule = (participants) => {
         };
       }
 
-      const hasBye = round.byes.some(
-        (byePlayer) => byePlayer.userId === player.userId,
+      const isSittingOut = round.sittingOut.some(
+        (sittingPlayer) => sittingPlayer.userId === player.userId,
       );
       return {
         round: round.round,
         opponent: null,
         field: null,
-        isBye: hasBye,
+        isSittingOut: isSittingOut,
       };
     });
 

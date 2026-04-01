@@ -459,7 +459,7 @@ Get full game details including all participants, round matchups, and field assi
             "playerB": { "userId": 5, "username": "sara" }
           }
         ],
-        "byes": []
+        "sittingOut": []
       }
     ],
     "playerRounds": [
@@ -471,7 +471,7 @@ Get full game details including all participants, round matchups, and field assi
             "round": 1,
             "opponent": { "userId": 5, "username": "sara" },
             "field": 1,
-            "isBye": false
+            "isSittingOut": false
           }
         ]
       }
@@ -511,7 +511,7 @@ Get only the schedule view for a game: rounds, opponents, and field assignments.
           "playerB": { "userId": 9, "username": "nina" }
         }
       ],
-      "byes": []
+      "sittingOut": []
     }
   ],
   "playerRounds": [
@@ -523,7 +523,7 @@ Get only the schedule view for a game: rounds, opponents, and field assignments.
           "round": 1,
           "opponent": { "userId": 5, "username": "sara" },
           "field": 1,
-          "isBye": false
+          "isSittingOut": false
         }
       ]
     }
