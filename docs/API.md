@@ -274,20 +274,26 @@ Users may only fetch their own profile. Admins may fetch any profile.
 Update a user's profile.
 
 - **Own ID** - users can update their own email and username.
-- **Other ID** - admins can update any user's email, username, and role.
+- **Other ID** - admins can update any user's email, username, role, and elo.
+- **Role change** - admins only; cannot change their own role.
+- **Elo change** - admins only; can change any user's elo.
 
 **Body** (all fields optional)
 
 ```json
 {
   "email": "new@example.com",
-  "username": "newname"
+  "username": "newname",
+  "role": "admin",
+  "elo": 1200
 }
 ```
 
+> `role` and `elo` are admin-only fields. Admins cannot change their own `role`.
+
 **200 OK** - returns the updated user object.
 
-**403 Forbidden** - updating another user without admin role.
+**403 Forbidden** - updating another user without admin role, or admin attempting to change their own role, or non-admin attempting to change role/elo.
 **404 Not Found**
 
 ---
