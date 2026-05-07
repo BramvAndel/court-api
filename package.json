@@ -7,7 +7,11 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "setup:db": "node scripts/setupDatabase.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --testPathPattern=__tests__/(services|utils)",
+    "test:integration": "jest --testPathPattern=__tests__/integration"
   },
   "keywords": [],
   "author": "",
@@ -15,12 +19,17 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
-    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "mysql2": "^3.19.1",
     "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "dotenv": "^17.4.2",
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }
