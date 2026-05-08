@@ -6,7 +6,7 @@ const { logger } = require("../config/logger");
  * 100 requests per 15 minutes (automatically resets after window)
  */
 const generalLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
+  windowMs: 1 * 60 * 1000, // 1 minute
   max: 100, // Limit each IP to 100 requests per window
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
@@ -33,8 +33,8 @@ const generalLimiter = rateLimit({
  * 5 requests per 5 minutes (resets after window expires)
  */
 const authLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 5, // Limit each IP to 5 login/register attempts per window
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // Limit each IP to 100 login/register attempts per window
   message: "Too many authentication attempts, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
