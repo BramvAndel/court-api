@@ -271,16 +271,29 @@ const getGameSchedule = async (gameId) => {
  * Sign up for a game
  * @param {number} gameId - Game ID
  * @param {number} userId - User ID
+ * @param {number} adminId - Admin ID (optional, if added by admin)
  * @returns {Object} Signup object
  * @throws {Error} If already signed up or game not found
  */
-const signupForGame = async (gameId, userId) => {
+const signupForGame = async (gameId, userId, adminId = null) => {
   // Check if game exists
   const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
 
   if (games.length === 0) {
     const error = new Error("Game not found");
     error.status = 404;
+    throw error;
+  }
+
+  // Check if user has been removed from this game
+  const removedCheck = await query(
+    "SELECT * FROM removed_game_participants WHERE gameID = ? AND userID = ?",
+    [gameId, userId],
+  );
+
+  if (removedCheck.length > 0) {
+    const error = new Error("You have been removed from this game and cannot rejoin");
+    error.status = 403;
     throw error;
   }
 
@@ -297,14 +310,15 @@ const signupForGame = async (gameId, userId) => {
   }
 
   const result = await query(
-    "INSERT INTO game_participants (gameID, userID) VALUES (?, ?)",
-    [gameId, userId],
+    "INSERT INTO game_participants (gameID, userID, added_by_admin, added_by_admin_id) VALUES (?, ?, ?, ?)",
+    [gameId, userId, adminId ? 1 : 0, adminId || null],
   );
 
   return {
     id: result.insertId,
     gameId,
     userId,
+    addedByAdmin: adminId ? true : false,
   };
 };
 
@@ -312,7 +326,7 @@ const signupForGame = async (gameId, userId) => {
  * Remove a user from a game
  * @param {number} gameId - Game ID
  * @param {number} userId - User ID
- * @throws {Error} If not signed up or game not found
+ * @throws {Error} If not signed up, game not found, or user was added by admin
  */
 const leaveGame = async (gameId, userId) => {
   // Check if game exists
@@ -333,6 +347,14 @@ const leaveGame = async (gameId, userId) => {
   if (existingSignups.length === 0) {
     const error = new Error("User is not signed up for this game");
     error.status = 409;
+    throw error;
+  }
+
+  // Check if user was added by admin - they cannot leave
+  const participant = existingSignups[0];
+  if (participant.added_by_admin) {
+    const error = new Error("You cannot leave this game because you were added by an admin");
+    error.status = 403;
     throw error;
   }
 
@@ -383,7 +405,7 @@ const startGame = async (gameId) => {
   }
 
   await query(
-    "UPDATE games SET status = 'started', startedAt = NOW() WHERE gameID = ?",
+    "UPDATE games SET status = 'started', startedAt = NOW(), current_round = 1 WHERE gameID = ?",
     [gameId],
   );
 
@@ -548,4 +570,228 @@ module.exports = {
   startGame,
   endGame,
   processGame,
+  removeUserFromGameAsAdmin,
+  getCurrentRound,
+  setCurrentRound,
+  sendMatchRequest,
+  respondToMatchRequest,
+  getMatchRequests,
 };
+
+/**
+ * Remove a user from a game (admin only) and record in removed_game_participants
+ * @param {number} gameId - Game ID
+ * @param {number} userId - User ID to remove
+ * @param {number} adminId - Admin ID performing the removal
+ * @param {string} reason - Reason for removal (optional)
+ * @throws {Error} If user not found in game
+ */
+async function removeUserFromGameAsAdmin(gameId, userId, adminId, reason = null) {
+  // Check if user is signed up
+  const existingSignups = await query(
+    "SELECT * FROM game_participants WHERE gameID = ? AND userID = ?",
+    [gameId, userId],
+  );
+
+  if (existingSignups.length === 0) {
+    const error = new Error("User is not signed up for this game");
+    error.status = 409;
+    throw error;
+  }
+
+  // Remove user from game_participants
+  await query("DELETE FROM game_participants WHERE gameID = ? AND userID = ?", [
+    gameId,
+    userId,
+  ]);
+
+  // Record removal in removed_game_participants
+  await query(
+    "INSERT INTO removed_game_participants (gameID, userID, removed_by_admin_id, reason) VALUES (?, ?, ?, ?)",
+    [gameId, userId, adminId, reason],
+  );
+}
+
+/**
+ * Get current round for a game
+ * @param {number} gameId - Game ID
+ * @returns {number|null} Current round number or null if not started
+ */
+async function getCurrentRound(gameId) {
+  const games = await query("SELECT current_round FROM games WHERE gameID = ?", [gameId]);
+
+  if (games.length === 0) {
+    const error = new Error("Game not found");
+    error.status = 404;
+    throw error;
+  }
+
+  return games[0].current_round;
+}
+
+/**
+ * Set current round for a game (admin only)
+ * @param {number} gameId - Game ID
+ * @param {number} roundNumber - Round number to set
+ * @throws {Error} If game not found or invalid round
+ */
+async function setCurrentRound(gameId, roundNumber) {
+  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+
+  if (games.length === 0) {
+    const error = new Error("Game not found");
+    error.status = 404;
+    throw error;
+  }
+
+  if (roundNumber < 1) {
+    const error = new Error("Round number must be at least 1");
+    error.status = 422;
+    throw error;
+  }
+
+  await query("UPDATE games SET current_round = ? WHERE gameID = ?", [roundNumber, gameId]);
+
+  return { gameId, currentRound: roundNumber };
+}
+
+/**
+ * Send a match request to another player for a specific game
+ * @param {number} gameId - Game ID
+ * @param {number} requestedByUserId - User ID sending the request
+ * @param {number} requestedForUserId - User ID the request is for
+ * @param {string} message - Optional message with the request
+ * @returns {Object} Created match request
+ */
+async function sendMatchRequest(gameId, requestedByUserId, requestedForUserId, message = null) {
+  // Check if game exists
+  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+  if (games.length === 0) {
+    const error = new Error("Game not found");
+    error.status = 404;
+    throw error;
+  }
+
+  // Check if both users exist
+  const users = await query(
+    "SELECT userID FROM users WHERE userID IN (?, ?)",
+    [requestedByUserId, requestedForUserId],
+  );
+
+  if (users.length !== 2) {
+    const error = new Error("One or both users not found");
+    error.status = 404;
+    throw error;
+  }
+
+  // Check if request already exists
+  const existingRequest = await query(
+    "SELECT * FROM match_requests WHERE gameID = ? AND requested_by_user_id = ? AND requested_for_user_id = ?",
+    [gameId, requestedByUserId, requestedForUserId],
+  );
+
+  if (existingRequest.length > 0) {
+    const error = new Error("Match request already exists");
+    error.status = 409;
+    throw error;
+  }
+
+  const result = await query(
+    "INSERT INTO match_requests (gameID, requested_by_user_id, requested_for_user_id, message) VALUES (?, ?, ?, ?)",
+    [gameId, requestedByUserId, requestedForUserId, message],
+  );
+
+  return {
+    id: result.insertId,
+    gameId,
+    requestedByUserId,
+    requestedForUserId,
+    status: "pending",
+    message,
+    createdAt: new Date(),
+  };
+}
+
+/**
+ * Respond to a match request (accept or reject)
+ * @param {number} requestId - Match request ID
+ * @param {string} status - 'accepted' or 'rejected'
+ * @returns {Object} Updated match request
+ */
+async function respondToMatchRequest(requestId, status) {
+  if (!["accepted", "rejected"].includes(status)) {
+    const error = new Error("Status must be 'accepted' or 'rejected'");
+    error.status = 422;
+    throw error;
+  }
+
+  const requests = await query("SELECT * FROM match_requests WHERE id = ?", [requestId]);
+
+  if (requests.length === 0) {
+    const error = new Error("Match request not found");
+    error.status = 404;
+    throw error;
+  }
+
+  const request = requests[0];
+
+  // If accepting, sign up the user for the game
+  if (status === "accepted") {
+    try {
+      await signupForGame(request.gameID, request.requested_for_user_id);
+    } catch (error) {
+      // If signup fails, still update the request status but throw error
+      await query("UPDATE match_requests SET status = ? WHERE id = ?", [status, requestId]);
+      throw error;
+    }
+  }
+
+  await query("UPDATE match_requests SET status = ? WHERE id = ?", [status, requestId]);
+
+  return {
+    id: requestId,
+    gameId: request.gameID,
+    requestedByUserId: request.requested_by_user_id,
+    requestedForUserId: request.requested_for_user_id,
+    status,
+    updatedAt: new Date(),
+  };
+}
+
+/**
+ * Get match requests for a user
+ * @param {number} userId - User ID
+ * @param {string} status - Filter by status ('pending', 'accepted', 'rejected', 'cancelled')
+ * @returns {Array} Array of match requests
+ */
+async function getMatchRequests(userId, status = null) {
+  let query_string = `
+    SELECT mr.*, g.name as game_name, u.username as requested_by_username
+    FROM match_requests mr
+    JOIN games g ON mr.gameID = g.gameID
+    JOIN users u ON mr.requested_by_user_id = u.userID
+    WHERE mr.requested_for_user_id = ?
+  `;
+  const params = [userId];
+
+  if (status) {
+    query_string += " AND mr.status = ?";
+    params.push(status);
+  }
+
+  query_string += " ORDER BY mr.created_at DESC";
+
+  const requests = await query(query_string, params);
+
+  return requests.map((r) => ({
+    id: r.id,
+    gameId: r.gameID,
+    gameName: r.game_name,
+    requestedByUserId: r.requested_by_user_id,
+    requestedByUsername: r.requested_by_username,
+    status: r.status,
+    message: r.message,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}

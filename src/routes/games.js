@@ -36,6 +36,28 @@ router.post(
   validateRequest(commonSchemas.idParam),
   gameController.leaveGame,
 );
+router.get(
+  "/:id/current-round",
+  authenticateToken,
+  validateRequest(commonSchemas.idParam),
+  gameController.getCurrentRound,
+);
+router.post(
+  "/:id/match-request",
+  authenticateToken,
+  validateRequest(commonSchemas.idParam),
+  gameController.sendMatchRequest,
+);
+router.get(
+  "/match-requests/incoming",
+  authenticateToken,
+  gameController.getMatchRequests,
+);
+router.put(
+  "/match-requests/:requestId/respond",
+  authenticateToken,
+  gameController.respondToMatchRequest,
+);
 
 // Admin routes
 router.post(
@@ -92,6 +114,13 @@ router.put(
     ...commonSchemas.processGame,
   }),
   gameController.processGame,
+);
+router.put(
+  "/:id/current-round",
+  authenticateToken,
+  authenticateAdmin,
+  validateRequest(commonSchemas.idParam),
+  gameController.setCurrentRound,
 );
 
 module.exports = router;

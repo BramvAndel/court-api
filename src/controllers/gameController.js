@@ -93,7 +93,7 @@ const signupUserForGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
     const userId = parseInt(req.params.userId);
-    const signup = await gameService.signupForGame(gameId, userId);
+    const signup = await gameService.signupForGame(gameId, userId, req.user.id);
 
     res.json({ message: "Signed up", signup });
   } catch (error) {
@@ -126,9 +126,10 @@ const removeUserFromGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
     const userId = parseInt(req.params.userId);
-    await gameService.leaveGame(gameId, userId);
+    const { reason } = req.body || {};
+    await gameService.removeUserFromGameAsAdmin(gameId, userId, req.user.id, reason);
 
-    res.json({ message: "Left game" });
+    res.json({ message: "User removed from game" });
   } catch (error) {
     res
       .status(error.status || 500)
@@ -191,6 +192,107 @@ const processGame = async (req, res) => {
   }
 };
 
+/**
+ * Get current round for a game
+ */
+const getCurrentRound = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    const currentRound = await gameService.getCurrentRound(gameId);
+
+    res.json({ gameId, currentRound });
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch current round" });
+  }
+};
+
+/**
+ * Set current round for a game (admin only)
+ */
+const setCurrentRound = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    const { roundNumber } = req.body;
+
+    if (!roundNumber || roundNumber < 1) {
+      return res.status(400).json({ message: "roundNumber must be at least 1" });
+    }
+
+    const result = await gameService.setCurrentRound(gameId, roundNumber);
+    res.json(result);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to set current round" });
+  }
+};
+
+/**
+ * Send a match request to another player
+ */
+const sendMatchRequest = async (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    const { requestedForUserId, message } = req.body;
+
+    if (!requestedForUserId) {
+      return res.status(400).json({ message: "requestedForUserId is required" });
+    }
+
+    const result = await gameService.sendMatchRequest(
+      gameId,
+      req.user.id,
+      requestedForUserId,
+      message,
+    );
+
+    res.status(201).json(result);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to send match request" });
+  }
+};
+
+/**
+ * Respond to a match request
+ */
+const respondToMatchRequest = async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.requestId);
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: "status is required" });
+    }
+
+    const result = await gameService.respondToMatchRequest(requestId, status);
+    res.json(result);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to respond to match request" });
+  }
+};
+
+/**
+ * Get match requests for the authenticated user
+ */
+const getMatchRequests = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const requests = await gameService.getMatchRequests(req.user.id, status);
+
+    res.json(requests);
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Failed to fetch match requests" });
+  }
+};
+
 module.exports = {
   getAllGames,
   getGameById,
@@ -203,4 +305,9 @@ module.exports = {
   startGame,
   endGame,
   processGame,
+  getCurrentRound,
+  setCurrentRound,
+  sendMatchRequest,
+  respondToMatchRequest,
+  getMatchRequests,
 };

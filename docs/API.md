@@ -600,6 +600,50 @@ Sign the authenticated user up for a game.
 
 Sign up any user for a game.
 
+When an admin signs up a user, the user is marked as `added_by_admin` and **cannot leave the game**.
+
+**200 OK**
+
+```json
+{
+  "message": "Signed up",
+  "signup": {
+    "id": 5,
+    "gameId": 1,
+    "userId": 3,
+    "addedByAdmin": true
+  }
+}
+```
+
+**404 Not Found** - game does not exist.
+**409 Conflict** - user is already signed up or has been removed from this game.
+**403 Forbidden** - user has been previously removed from this game.
+
+---
+
+### `POST /api/games/:id/leave` (auth required)
+
+Remove the authenticated user from a game's participant list.
+
+**200 OK**
+
+```json
+{
+  "message": "Left game"
+}
+```
+
+**404 Not Found** - game does not exist.
+**403 Forbidden** - user was added by an admin and cannot leave.
+**409 Conflict** - user is not signed up.
+
+> **Note**: Users added by an admin cannot leave the game. Admins must remove them using the remove endpoint.
+
+---
+
+Sign up any user for a game.
+
 **200 OK**
 
 ```json
@@ -639,16 +683,232 @@ Remove the authenticated user from a game's participant list.
 
 Remove a specific user from a game's participant list.
 
+**Body** (optional)
+
+```json
+{
+  "reason": "Player didn't show up"
+}
+```
+
 **200 OK**
 
 ```json
 {
-  "message": "Left game"
+  "message": "User removed from game"
 }
 ```
 
 **404 Not Found** - game does not exist.
 **409 Conflict** - user is not signed up.
+
+> **Note**: When an admin removes a user, the user is recorded in `removed_game_participants` and cannot rejoin this game.
+
+---
+
+### `GET /api/games/:id/current-round` (auth required)
+
+Get the current round of a game when it has started.
+
+Returns the round number that is currently being played, or `null` if the game hasn't started yet.
+
+**200 OK**
+
+```json
+{
+  "gameId": 1,
+  "currentRound": 2
+}
+```
+
+**404 Not Found** - game does not exist.
+
+---
+
+### `PUT /api/games/:id/current-round` (admin required)
+
+Set the current round for a game (to track progress during play).
+
+**Body**
+
+```json
+{
+  "roundNumber": 3
+}
+```
+
+| Field        | Type    | Required | Description                   |
+| ------------ | ------- | -------- | ----------------------------- |
+| `roundNumber` | integer | ✅       | Round number to set (≥ 1)     |
+
+**200 OK**
+
+```json
+{
+  "gameId": 1,
+  "currentRound": 3
+}
+```
+
+**400 Bad Request** - `roundNumber` missing or invalid.
+**404 Not Found** - game does not exist.
+**422 Unprocessable** - `roundNumber` is less than 1.
+
+---
+
+### `POST /api/games/:id/match-request` (auth required)
+
+Send a match request to another player for a specific game.
+
+This allows players to invite or request matches with other players.
+
+**Body**
+
+```json
+{
+  "requestedForUserId": 5,
+  "message": "Want to play a match?"
+}
+```
+
+| Field                 | Type    | Required | Description                        |
+| --------------------- | ------- | -------- | ---------------------------------- |
+| `requestedForUserId`   | integer | ✅       | User ID of the player being invited |
+| `message`              | string  | ❌       | Optional message with the request  |
+
+**201 Created**
+
+```json
+{
+  "id": 1,
+  "gameId": 1,
+  "requestedByUserId": 3,
+  "requestedForUserId": 5,
+  "status": "pending",
+  "message": "Want to play a match?",
+  "createdAt": "2026-03-14T14:00:00.000Z"
+}
+```
+
+**404 Not Found** - game or user does not exist.
+**409 Conflict** - a pending request already exists between these users for this game.
+
+---
+
+### `GET /api/games/match-requests/incoming` (auth required)
+
+Get all incoming match requests for the authenticated user.
+
+**Query Parameters** (optional)
+
+| Parameter | Type   | Description                                                      |
+| --------- | ------ | ---------------------------------------------------------------- |
+| `status`  | string | Filter by status: `pending`, `accepted`, `rejected`, `cancelled` |
+
+**200 OK**
+
+```json
+[
+  {
+    "id": 1,
+    "gameId": 1,
+    "gameName": "Friday Session",
+    "requestedByUserId": 3,
+    "requestedByUsername": "bram",
+    "status": "pending",
+    "message": "Want to play a match?",
+    "createdAt": "2026-03-14T14:00:00.000Z",
+    "updatedAt": "2026-03-14T14:00:00.000Z"
+  }
+]
+```
+
+Returns an empty array if no requests are found.
+
+---
+
+### `PUT /api/games/match-requests/:requestId/respond` (auth required)
+
+Accept or reject a match request.
+
+When accepting a request, the requestee is automatically signed up for the game.
+
+**Body**
+
+```json
+{
+  "status": "accepted"
+}
+```
+
+| Field    | Type   | Required | Description              |
+| -------- | ------ | -------- | ------------------------ |
+| `status` | string | ✅       | Either `accepted` or `rejected` |
+
+**200 OK**
+
+```json
+{
+  "id": 1,
+  "gameId": 1,
+  "requestedByUserId": 3,
+  "requestedForUserId": 5,
+  "status": "accepted",
+  "updatedAt": "2026-03-14T14:05:00.000Z"
+}
+```
+
+**400 Bad Request** - `status` missing.
+**404 Not Found** - request does not exist.
+**422 Unprocessable** - invalid status value.
+
+---
+
+## Match and Participant Management
+
+### Admin-Added Users
+
+When an admin signs up a user for a game using `POST /api/games/:id/signup/:userId`, the user:
+- Is marked with `added_by_admin = true`
+- **Cannot leave the game** - attempting to leave will return **403 Forbidden**
+- Can only be removed by an admin using `POST /api/games/:id/leave/:userId`
+
+This is useful for mandatory participation or tournament-style events where admins have direct control.
+
+### Removed Users
+
+When an admin removes a user from a game using `POST /api/games/:id/leave/:userId`, the removal is recorded permanently:
+- The user is removed from the game's participant list
+- The user is recorded in the `removed_game_participants` table
+- The user **cannot rejoin this specific game** - attempting to sign up will return **403 Forbidden** with message "You have been removed from this game and cannot rejoin"
+- Admins can sign them up again by force using the admin signup endpoint
+
+This prevents accidental rejoinings after removal.
+
+### Current Round Tracking
+
+Games track their current round of play:
+- When a game is started, `current_round` is set to **1**
+- Admins can update the current round using `PUT /api/games/:id/current-round` to track progress
+- Users can view the current round using `GET /api/games/:id/current-round` to see which round is being played
+
+This is useful for real-time score tracking and tournament management.
+
+### Match Requests System
+
+The match request system allows players to invite or request matches with other players:
+
+1. **Send Request**: Use `POST /api/games/:id/match-request` to invite another player to join a game
+2. **View Requests**: Use `GET /api/games/match-requests/incoming` to see all requests sent to you
+3. **Respond**: Use `PUT /api/games/match-requests/:requestId/respond` to accept or reject
+   - **Accept**: Automatically signs you up for the game
+   - **Reject**: Records the rejection but doesn't sign you up
+
+Request statuses:
+- `pending` - awaiting response
+- `accepted` - request accepted and user signed up
+- `rejected` - request declined
+- `cancelled` - request cancelled by sender
 
 ---
 
