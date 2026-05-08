@@ -47,9 +47,24 @@ const getUserById = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
+    const isAdmin = req.user.role === "admin";
+    const isSelf = req.user.id === userId;
+    const hasOwn = (field) =>
+      Object.prototype.hasOwnProperty.call(req.body, field);
 
-    const updates = req.body;
-    const user = await userService.updateUser(userId, updates);
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    if (!isAdmin && (hasOwn("role") || hasOwn("elo"))) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    if (isAdmin && isSelf && hasOwn("role")) {
+      return res
+        .status(403)
+        .json({ message: "Admins cannot change their own role" });
+    }
+
+    const user = await userService.updateUser(userId, req.body, true);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });

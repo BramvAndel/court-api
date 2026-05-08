@@ -42,6 +42,8 @@ const getUserById = async (userId, isAdmin = false) => {
 const updateUser = async (userId, updates) => {
   const updateFields = [];
   const values = [];
+  const hasOwn = (field) =>
+    Object.prototype.hasOwnProperty.call(updates, field);
 
   if (updates.email) {
     updateFields.push("email = ?");
@@ -51,18 +53,35 @@ const updateUser = async (userId, updates) => {
     updateFields.push("username = ?");
     values.push(updates.name || updates.username);
   }
+  if (updates.role) {
+    updateFields.push("role = ?");
+    values.push(updates.role);
+  }
+  if (hasOwn("elo")) {
+    updateFields.push("elo = ?");
+    values.push(updates.elo);
+  }
 
   if (updateFields.length === 0) {
-    return getUserById(userId);
+    return getUserById(userId, true);
   }
 
   values.push(userId);
-  await query(
-    `UPDATE users SET ${updateFields.join(", ")} WHERE userID = ?`,
-    values,
-  );
+  try {
+    await query(
+      `UPDATE users SET ${updateFields.join(", ")} WHERE userID = ?`,
+      values,
+    );
+  } catch (error) {
+    if (error?.code === "ER_DUP_ENTRY") {
+      const conflictError = new Error("Email or username already exists");
+      conflictError.status = 409;
+      throw conflictError;
+    }
+    throw error;
+  }
 
-  return getUserById(userId);
+  return getUserById(userId, true);
 };
 
 /**

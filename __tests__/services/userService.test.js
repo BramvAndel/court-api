@@ -120,6 +120,47 @@ describe('UserService', () => {
         expect.arrayContaining([updates.username, 1]),
       );
     });
+
+    it('should update admin fields role and elo', async () => {
+      const updates = { role: 'admin', elo: 1300 };
+
+      database.query
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce([{ ...testData.users.testUser1, role: updates.role, elo: updates.elo }]);
+
+      await userService.updateUser(1, updates);
+
+      expect(database.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE users SET role = ?, elo = ?'),
+        expect.arrayContaining([updates.role, updates.elo, 1]),
+      );
+    });
+
+    it('should support elo value of zero', async () => {
+      const updates = { elo: 0 };
+
+      database.query
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce([{ ...testData.users.testUser1, elo: 0 }]);
+
+      await userService.updateUser(1, updates);
+
+      expect(database.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE users SET elo = ?'),
+        expect.arrayContaining([0, 1]),
+      );
+    });
+
+    it('should convert duplicate constraint errors to 409', async () => {
+      const duplicateError = new Error('Duplicate entry');
+      duplicateError.code = 'ER_DUP_ENTRY';
+      database.query.mockRejectedValueOnce(duplicateError);
+
+      await expect(userService.updateUser(1, { email: 'taken@example.com' })).rejects.toMatchObject({
+        status: 409,
+        message: 'Email or username already exists',
+      });
+    });
   });
 
   describe('deleteUser', () => {

@@ -116,6 +116,7 @@ describe('User Controller Integration Tests', () => {
     it('should update user successfully', async () => {
       req.params.id = '1';
       req.body = { email: 'newemail@example.com' };
+      req.user = { id: 1, role: 'user' };
 
       userService.updateUser.mockResolvedValueOnce({
         id: 1,
@@ -132,12 +133,65 @@ describe('User Controller Integration Tests', () => {
     it('should return 404 if user not found', async () => {
       req.params.id = '999';
       req.body = { email: 'test@example.com' };
+      req.user = { id: 999, role: 'user' };
 
       userService.updateUser.mockResolvedValueOnce(null);
 
       await userController.updateUser(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('should deny non-admin role updates', async () => {
+      req.params.id = '1';
+      req.body = { role: 'admin' };
+      req.user = { id: 1, role: 'user' };
+
+      await userController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(userService.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('should deny non-admin elo updates', async () => {
+      req.params.id = '1';
+      req.body = { elo: 1300 };
+      req.user = { id: 1, role: 'user' };
+
+      await userController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(userService.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('should allow admin to update another user role and elo', async () => {
+      req.params.id = '2';
+      req.body = { role: 'admin', elo: 1400 };
+      req.user = { id: 1, role: 'admin' };
+
+      userService.updateUser.mockResolvedValueOnce({
+        id: 2,
+        name: 'other-user',
+        email: 'other@example.com',
+        role: 'admin',
+        elo: 1400,
+      });
+
+      await userController.updateUser(req, res);
+
+      expect(userService.updateUser).toHaveBeenCalledWith(2, req.body);
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('should deny admin changing own role', async () => {
+      req.params.id = '1';
+      req.body = { role: 'user' };
+      req.user = { id: 1, role: 'admin' };
+
+      await userController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(userService.updateUser).not.toHaveBeenCalled();
     });
   });
 

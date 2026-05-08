@@ -317,6 +317,17 @@ const commonSchemas = {
         maxLength: 30,
         pattern: USERNAME_REGEX,
       },
+      role: {
+        type: "string",
+        required: false,
+        enum: ["user", "admin"],
+      },
+      elo: {
+        type: "number",
+        required: false,
+        integer: true,
+        min: 0,
+      },
     },
   },
   createGame: {
