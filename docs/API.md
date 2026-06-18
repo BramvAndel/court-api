@@ -21,6 +21,77 @@ When an access token expires the server returns **401**. Call `POST /api/auth/re
 
 ---
 
+## Organizations & multi-tenancy
+
+Every account and every piece of gameplay data belongs to an **Organization (org)**. An
+org is a private tenant with its own users, games, leaderboard, and history — data never
+crosses org boundaries.
+
+There are three roles across two worlds:
+
+- **`user`** — plays inside exactly one org.
+- **`manager`** — runs one org. Has the powers a single-app `admin` used to have, but
+  scoped to their own org, plus they own the org's branding (name + accent color). An org
+  can have multiple managers.
+- **`admin`** — a **platform** operator that belongs to **no** org. Manages orgs from
+  above (branding + manager accounts) but cannot reach into an org's gameplay data.
+
+Because the org is carried in the session, **org members never pass an org id on
+gameplay requests** — the server scopes everything to the caller's org automatically.
+
+| Login door | Used by | Endpoint |
+| ---------- | ------- | -------- |
+| Org login  | `user`, `manager` | `POST /api/auth/login` (requires `orgId`) |
+| Admin login | `admin` | `POST /api/auth/admin/login` (no org) |
+
+### Org status & read-only mode
+
+An org is always in one of three states:
+
+| Status            | Members can log in? | Behaviour |
+| ----------------- | ------------------- | --------- |
+| `pending_payment` | ❌ | Just created, never paid. Activate via the public payment simulation. |
+| `active`          | ✅ | Normal — full read & write. |
+| `inactive`        | ✅ (read-only) | Deactivated. Members can log in and **read** everything, but **all writes are blocked** until the org is reactivated (manager payment or admin override). |
+
+```txt
+created (pending_payment) --(simulate payment)--> active
+                            active --(deactivate: admin)--> inactive
+                            inactive --(manager pays | admin override)--> active
+```
+
+- **Deactivation** is **admin-only** (for now): [`POST /api/admin/orgs/:id/deactivate`](#post-apiadminorgsiddeactivate-admin-required).
+- **Reactivation** happens two ways:
+  - a **manager** of the org pays another (simulated) charge: [`POST /api/orgs/me/reactivate`](#post-apiorgsmereactivate-manager-required), or
+  - an **admin** flips it back **without payment**: [`POST /api/admin/orgs/:id/reactivate`](#post-apiadminorgsidreactivate-admin-required).
+
+**Read-only enforcement:** while an org is `inactive`, **every** write request
+(`POST`/`PUT`/`DELETE`) from **any** of its members returns **403 Forbidden** with
+`{ "message": "Organization is inactive (read-only). A manager must reactivate it." }`.
+
+- **Regular users** are blocked too: no game signups, leaving games, match requests,
+  responding to requests, or profile edits.
+- **Managers** are equally blocked: their normal powers (creating/managing games, managing
+  users, editing org branding, etc.) are **all suspended**. The **only** write a manager
+  can perform is the reactivation payment
+  ([`POST /api/orgs/me/reactivate`](#post-apiorgsmereactivate-manager-required)).
+
+Once the org is `active` again (via manager payment or admin override), everything works
+as normal for everyone.
+
+Always exempt from the read-only block:
+- Authentication (`/api/auth/*`) - members can still log in.
+- The manager reactivation payment (`POST /api/orgs/me/reactivate`).
+- All platform-admin endpoints (`/api/admin/*`), including the admin's no-payment
+  reactivation.
+
+`GET` requests are never affected.
+
+See [Organizations](#organizations-apiorgs), [Admin](#admin-apiadmin), and the
+[Role reference](#role-reference).
+
+---
+
 ## Response format
 
 All responses are JSON.
@@ -89,7 +160,7 @@ Returns the current health status of the API and its database connection. No aut
 
 ### `POST /api/auth/register` (public)
 
-Create a new user account.
+Create a new user account inside an existing org.
 
 > Also available as `POST /api/users` (see Users section).
 
@@ -97,39 +168,94 @@ Create a new user account.
 
 ```json
 {
+  "orgId": 7,
   "email": "user@example.com",
   "password": "secret123",
   "username": "optional_username"
 }
 ```
 
-`email` and `password` are required. `username` defaults to the part of the email before `@`.
+`orgId`, `email`, and `password` are required. The user joins org `orgId` with role
+`user`. `username` defaults to the part of the email before `@`. Email/username
+uniqueness is enforced **per org** (the same email may exist in different orgs).
 
 **201 Created**
 
 ```json
 {
   "id": 1,
+  "orgId": 7,
   "email": "user@example.com",
   "name": "user",
   "role": "user"
 }
 ```
 
-**409 Conflict** - email or username already taken.
+**404 Not Found** - org does not exist or is not `active`.
+**409 Conflict** - email or username already taken in this org.
 
 ---
 
 ### `POST /api/auth/login` (public)
 
-Authenticate and receive session cookies.
+Authenticate a `user` or `manager` **within an org** and receive session cookies.
+
+The org must be supplied. Use [`GET /api/orgs`](#get-apiorgs-public) or
+[`GET /api/orgs/search`](#get-apiorgssearch-public) to let the user pick their org first.
 
 **Body**
 
 ```json
 {
+  "orgId": 7,
   "email": "user@example.com",
   "password": "secret123"
+}
+```
+
+`orgId`, `email`, and `password` are required.
+
+**200 OK** - sets `accessToken` and `refreshToken` cookies. The session carries the
+caller's `orgId` and `role`, so later requests are scoped automatically. The org's
+branding is returned so the frontend can theme immediately.
+
+```json
+{
+  "user": {
+    "id": 1,
+    "orgId": 7,
+    "email": "user@example.com",
+    "name": "user",
+    "role": "user"
+  },
+  "org": {
+    "id": 7,
+    "name": "Downtown Padel Club",
+    "accentColor": "#1E88E5"
+  }
+}
+```
+
+**401 Unauthorized** - invalid credentials for this org.
+**403 Forbidden** - an `admin` account attempted the org login (admins must use the admin login).
+**404 Not Found** - org does not exist or is `pending_payment`.
+
+> Members of an `inactive` org **can** log in — they get a read-only session (see
+> [Org status & read-only mode](#org-status--read-only-mode)).
+
+---
+
+### `POST /api/auth/admin/login` (public)
+
+Authenticate a **platform admin**. Admins belong to no org, so there is **no** `orgId`
+field. Org `user`/`manager` accounts are rejected here.
+
+**Body**
+
+```json
+{
+  "email": "platform-admin@kingofcourt.com",
+  "password": "rootpassword"
 }
 ```
 
@@ -138,15 +264,16 @@ Authenticate and receive session cookies.
 ```json
 {
   "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "name": "user",
-    "role": "user"
+    "id": 99,
+    "email": "platform-admin@kingofcourt.com",
+    "name": "platform-admin",
+    "role": "admin"
   }
 }
 ```
 
 **401 Unauthorized** - invalid credentials.
+**403 Forbidden** - a non-admin (org) account attempted the admin login.
 
 ---
 
@@ -185,11 +312,15 @@ No body required - reads the `refreshToken` cookie.
 
 Return the authenticated user's own profile.
 
+> For an org member this includes their `orgId`. A platform `admin` has `orgId: null` and
+> no `elo`.
+
 **200 OK**
 
 ```json
 {
   "id": 1,
+  "orgId": 7,
   "email": "user@example.com",
   "name": "user",
   "role": "user",
@@ -200,21 +331,552 @@ Return the authenticated user's own profile.
 
 ---
 
-## Users `/api/users/*`
+## Organizations `/api/orgs/*`
 
-### `POST /api/users` (public)
+Endpoints for creating, discovering, and reading organizations.
 
-Register a new user (alias for `POST /api/auth/register`).
+### `POST /api/orgs` (public)
 
-See [Auth -> Register](#post-apiauthregister).
+Create a new org **and its first manager account** in one call. The org starts in
+`pending_payment` and is not usable until payment is simulated (see next endpoint).
+
+**Body**
+
+```json
+{
+  "name": "Downtown Padel Club",
+  "accentColor": "#1E88E5",
+  "managerEmail": "owner@downtownpadel.com",
+  "managerPassword": "supersecret"
+}
+```
+
+| Field             | Type   | Required | Description                              |
+| ----------------- | ------ | -------- | ---------------------------------------- |
+| `name`            | string | ✅       | Display name of the org                  |
+| `accentColor`     | string | ✅       | Hex color for branding, e.g. `#1E88E5`   |
+| `managerEmail`    | string | ✅       | Email for the first `manager` account    |
+| `managerPassword` | string | ✅       | Password for the first `manager` account |
+
+**201 Created** - returns the org (in `pending_payment`) and a **simulated** payment
+session. No real payment provider is contacted.
+
+```json
+{
+  "org": {
+    "id": 7,
+    "name": "Downtown Padel Club",
+    "accentColor": "#1E88E5",
+    "status": "pending_payment"
+  },
+  "payment": {
+    "sessionId": "sim_pay_abc123",
+    "amount": 4900,
+    "currency": "eur",
+    "status": "requires_payment"
+  }
+}
+```
+
+**400 Bad Request** - missing/invalid fields (e.g. `accentColor` not a hex color).
+**409 Conflict** - org name or manager email already in use.
 
 ---
 
-### `GET /api/users` (admin required)
+### `POST /api/orgs/:id/payment/simulate` (public)
 
-Fetch all users.
+Simulate paying for an org. **This does not charge anything** - it marks the payment as
+paid and flips the org to `active`, after which its managers can log in.
 
-Requires an authenticated user with `admin` role.
+**Body**
+
+```json
+{ "sessionId": "sim_pay_abc123" }
+```
+
+**200 OK**
+
+```json
+{
+  "org": { "id": 7, "name": "Downtown Padel Club", "status": "active" },
+  "payment": { "sessionId": "sim_pay_abc123", "status": "paid" }
+}
+```
+
+**404 Not Found** - org or session does not exist.
+**409 Conflict** - org is already `active` / already paid.
+
+---
+
+### `GET /api/orgs` (public)
+
+List all **loginable** orgs (`active` and `inactive`) - used to power the org picker on
+the login screen. Each entry carries its `status` so the frontend can badge an `inactive`
+org as read-only.
+
+> `pending_payment` orgs are excluded (nobody can log into them yet). To see orgs of every
+> status, use the admin list [`GET /api/admin/orgs`](#get-apiadminorgs-admin-required).
+
+**200 OK**
+
+```json
+[
+  { "id": 7, "name": "Downtown Padel Club", "accentColor": "#1E88E5", "status": "active" },
+  { "id": 8, "name": "Riverside Tennis",    "accentColor": "#43A047", "status": "inactive" }
+]
+```
+
+---
+
+### `GET /api/orgs/search` (public)
+
+Search **loginable** orgs (`active` and `inactive`) by name (partial match).
+
+**Query Parameters**
+
+| Parameter | Type   | Required | Description              |
+| --------- | ------ | -------- | ------------------------ |
+| `q`       | string | ✅       | Partial org name to match |
+
+**200 OK** - same shape as `GET /api/orgs`. Returns an empty array when no matches.
+
+---
+
+### `GET /api/orgs/me` (auth required)
+
+Return the org the caller is currently logged into. The org is read from the session, so
+there is no id in the URL and no way to read another org.
+
+**Response depends on role:**
+
+**200 OK** (manager) - full org detail.
+
+```json
+{
+  "id": 7,
+  "name": "Downtown Padel Club",
+  "accentColor": "#1E88E5",
+  "status": "active",
+  "createdAt": "2026-06-18T10:00:00.000Z",
+  "memberCount": 42,
+  "gameCount": 13,
+  "managers": [
+    { "id": 12, "email": "owner@downtownpadel.com", "name": "owner" }
+  ]
+}
+```
+
+**200 OK** (user) - branding basics only.
+
+```json
+{
+  "id": 7,
+  "name": "Downtown Padel Club",
+  "accentColor": "#1E88E5"
+}
+```
+
+**403 Forbidden** - a platform `admin` (who has no org) called this.
+
+---
+
+### `PUT /api/orgs/me` (manager required)
+
+Update the **caller's own** org branding. The target org comes from the session, never the
+URL, so a manager can only ever edit their own org.
+
+**Body** (all fields optional)
+
+```json
+{
+  "name": "Downtown Padel & Social",
+  "accentColor": "#0D47A1"
+}
+```
+
+**200 OK** - returns the updated org.
+
+```json
+{
+  "id": 7,
+  "name": "Downtown Padel & Social",
+  "accentColor": "#0D47A1",
+  "status": "active"
+}
+```
+
+**400 Bad Request** - invalid `accentColor`.
+**403 Forbidden** - caller is not a `manager`.
+**409 Conflict** - new name already in use by another org.
+
+> Editing branding is a write, so it is blocked while the org is `inactive` - reactivate
+> first via `POST /api/orgs/me/reactivate`.
+
+---
+
+### `POST /api/orgs/me/reactivate` (manager required)
+
+Reactivate the caller's own `inactive` org by making another **simulated** payment. This
+is the manager's way back to `active` after an admin deactivated the org. No real payment
+is taken.
+
+This endpoint is exempt from the read-only block (it's how a manager lifts that block).
+
+No body required.
+
+**200 OK**
+
+```json
+{
+  "org": { "id": 7, "name": "Downtown Padel Club", "status": "active" },
+  "payment": { "sessionId": "sim_pay_def456", "status": "paid" }
+}
+```
+
+**403 Forbidden** - caller is not a `manager`.
+**409 Conflict** - org is not `inactive` (e.g. already `active`).
+
+---
+
+## Admin `/api/admin/*`
+
+Platform-admin-only endpoints for managing orgs **from above**. All require an
+authenticated `admin` (logged in via [`POST /api/auth/admin/login`](#post-apiauthadminlogin-public)).
+
+Admins operate at the org level only: org branding and **manager accounts**. They cannot
+create or edit normal users, games, elo, or any gameplay data - that is managers-only.
+
+### `GET /api/admin/orgs` (admin required)
+
+List **every** org, of any status (`pending_payment`, `active`, `inactive`).
+
+**200 OK**
+
+```json
+[
+  {
+    "id": 7,
+    "name": "Downtown Padel Club",
+    "accentColor": "#1E88E5",
+    "status": "active",
+    "createdAt": "2026-06-18T10:00:00.000Z",
+    "memberCount": 42
+  },
+  {
+    "id": 9,
+    "name": "Pending Club",
+    "accentColor": "#FB8C00",
+    "status": "pending_payment",
+    "createdAt": "2026-06-18T11:00:00.000Z",
+    "memberCount": 1
+  }
+]
+```
+
+**403 Forbidden** - caller is not an `admin`.
+
+---
+
+### `GET /api/admin/orgs/:id` (admin required)
+
+View a single org's detail.
+
+**200 OK**
+
+```json
+{
+  "id": 7,
+  "name": "Downtown Padel Club",
+  "accentColor": "#1E88E5",
+  "status": "active",
+  "createdAt": "2026-06-18T10:00:00.000Z",
+  "memberCount": 42,
+  "gameCount": 13,
+  "managers": [
+    { "id": 12, "email": "owner@downtownpadel.com", "name": "owner" }
+  ]
+}
+```
+
+**404 Not Found**
+
+---
+
+### `PUT /api/admin/orgs/:id` (admin required)
+
+Change any org's name and/or accent color.
+
+**Body** (all fields optional)
+
+```json
+{
+  "name": "Renamed Club",
+  "accentColor": "#6A1B9A"
+}
+```
+
+**200 OK** - returns the updated org.
+
+**400 Bad Request** - invalid `accentColor`.
+**404 Not Found**
+**409 Conflict** - new name already in use.
+
+---
+
+### `POST /api/admin/orgs/:id/deactivate` (admin required)
+
+Deactivate an `active` org, putting it into read-only `inactive` mode. Members can still
+log in and read, but cannot write until it is reactivated - either by a manager paying via
+[`POST /api/orgs/me/reactivate`](#post-apiorgsmereactivate-manager-required) or by an admin
+via [`POST /api/admin/orgs/:id/reactivate`](#post-apiadminorgsidreactivate-admin-required).
+
+> Deactivation is **admin-only for now**. Reactivation is done by a **manager** (via
+> simulated payment) or by an **admin** (no payment).
+
+No body required.
+
+**200 OK**
+
+```json
+{
+  "id": 7,
+  "name": "Downtown Padel Club",
+  "accentColor": "#1E88E5",
+  "status": "inactive"
+}
+```
+
+**404 Not Found** - org does not exist.
+**409 Conflict** - org is not `active` (e.g. already `inactive` or `pending_payment`).
+
+---
+
+### `POST /api/admin/orgs/:id/reactivate` (admin required)
+
+Reactivate an `inactive` org **without payment**. This is the admin's override - it does
+not create or require a payment (unlike the manager's
+[`POST /api/orgs/me/reactivate`](#post-apiorgsmereactivate-manager-required), which goes
+through a simulated payment).
+
+No body required.
+
+**200 OK**
+
+```json
+{
+  "id": 7,
+  "name": "Downtown Padel Club",
+  "accentColor": "#1E88E5",
+  "status": "active"
+}
+```
+
+**404 Not Found** - org does not exist.
+**409 Conflict** - org is not `inactive` (e.g. already `active`).
+
+---
+
+### `DELETE /api/admin/orgs/:id` (admin required)
+
+Remove an org entirely. (This is a permanent delete, distinct from deactivation above.)
+
+**200 OK**
+
+```json
+{ "message": "Organization deleted successfully" }
+```
+
+**404 Not Found**
+
+---
+
+### `GET /api/admin/orgs/:id/managers` (admin required)
+
+List the manager accounts of an org.
+
+**200 OK**
+
+```json
+[
+  { "id": 12, "email": "owner@downtownpadel.com", "name": "owner" },
+  { "id": 18, "email": "coach@downtownpadel.com", "name": "coach" }
+]
+```
+
+**404 Not Found** - org does not exist.
+
+---
+
+### `POST /api/admin/orgs/:id/managers` (admin required)
+
+Create a new manager account in an org.
+
+**Body**
+
+```json
+{
+  "email": "newmanager@downtownpadel.com",
+  "password": "secret123",
+  "username": "newmanager"
+}
+```
+
+`email` and `password` are required. `username` defaults to the part of the email before
+`@`.
+
+**201 Created**
+
+```json
+{
+  "id": 21,
+  "orgId": 7,
+  "email": "newmanager@downtownpadel.com",
+  "name": "newmanager",
+  "role": "manager"
+}
+```
+
+**404 Not Found** - org does not exist.
+**409 Conflict** - email already taken in this org.
+
+---
+
+### `PUT /api/admin/orgs/:id/managers/:managerId` (admin required)
+
+Change a manager account's email and/or password.
+
+**Body** (all fields optional)
+
+```json
+{
+  "email": "updated@downtownpadel.com",
+  "password": "newpassword"
+}
+```
+
+**200 OK** - returns the updated manager (without the password).
+
+```json
+{
+  "id": 12,
+  "orgId": 7,
+  "email": "updated@downtownpadel.com",
+  "name": "owner",
+  "role": "manager"
+}
+```
+
+**404 Not Found** - org or manager does not exist (or the user is not a manager of this org).
+**409 Conflict** - email already taken in this org.
+
+---
+
+### `DELETE /api/admin/orgs/:id/managers/:managerId` (admin required)
+
+Remove a manager account from an org.
+
+**200 OK**
+
+```json
+{ "message": "Manager deleted successfully" }
+```
+
+**404 Not Found** - org or manager does not exist.
+
+> Admins manage **manager** and **admin** accounts only (see admin-account endpoints
+> below). They can never create, edit, or delete normal `user` accounts - that is
+> managers-only.
+
+---
+
+### `GET /api/admin/admins` (admin required)
+
+List all platform admin accounts. Admins belong to no org, so there is no `orgId`.
+
+**200 OK**
+
+```json
+[
+  { "id": 99, "email": "platform-admin@kingofcourt.com", "name": "platform-admin", "role": "admin" },
+  { "id": 100, "email": "second-admin@kingofcourt.com", "name": "second-admin", "role": "admin" }
+]
+```
+
+**403 Forbidden** - caller is not an `admin`.
+
+---
+
+### `POST /api/admin/admins` (admin required)
+
+Create another platform admin account.
+
+**Body**
+
+```json
+{
+  "email": "second-admin@kingofcourt.com",
+  "password": "rootpassword2",
+  "username": "second-admin"
+}
+```
+
+`email` and `password` are required. `username` defaults to the part of the email before
+`@`. The new account has role `admin` and no org.
+
+**201 Created**
+
+```json
+{
+  "id": 100,
+  "email": "second-admin@kingofcourt.com",
+  "name": "second-admin",
+  "role": "admin"
+}
+```
+
+**409 Conflict** - an admin with this email already exists.
+
+---
+
+### `DELETE /api/admin/admins/:id` (admin required)
+
+Delete another platform admin account.
+
+**200 OK**
+
+```json
+{ "message": "Admin deleted successfully" }
+```
+
+**403 Forbidden** - an admin attempting to delete **their own** account. Admins cannot
+delete themselves; another admin must do it.
+**404 Not Found** - admin does not exist.
+
+> Self-deletion guard: an `admin` can never delete their own account, ensuring the
+> platform always retains at least one operator.
+
+---
+
+## Users `/api/users/*`
+
+> All user endpoints are **org-scoped**: managers operate only on users within their own
+> org, and listings only ever contain the caller's org. Platform admins do not use these
+> endpoints (they manage manager accounts via [`/api/admin/*`](#admin-apiadmin)).
+
+### `POST /api/users` (public)
+
+Register a new user (alias for `POST /api/auth/register`). Requires `orgId`.
+
+See [Auth -> Register](#post-apiauthregister-public).
+
+---
+
+### `GET /api/users` (manager required)
+
+Fetch all users **in the caller's org**.
+
+Requires an authenticated `manager`. The result only ever contains members of the
+manager's own org.
 
 **200 OK**
 
@@ -222,15 +884,17 @@ Requires an authenticated user with `admin` role.
 [
   {
     "id": 1,
-    "email": "admin@example.com",
-    "name": "admin",
-    "role": "admin",
+    "orgId": 7,
+    "email": "manager@example.com",
+    "name": "manager",
+    "role": "manager",
     "elo": 1200,
     "phone_number": "+31 6 12345678",
     "createdAt": "2026-03-11T08:00:00.000Z"
   },
   {
     "id": 3,
+    "orgId": 7,
     "email": "user@example.com",
     "name": "username",
     "role": "user",
@@ -241,15 +905,15 @@ Requires an authenticated user with `admin` role.
 ]
 ```
 
-**403 Forbidden** - authenticated user is not an admin.
+**403 Forbidden** - authenticated user is not a manager.
 
 ---
 
 ### `GET /api/users/:id` (auth required)
 
-Fetch a user by ID.
+Fetch a user by ID (within the caller's org).
 
-Users may only fetch their own profile. Admins may fetch any profile.
+Users may only fetch their own profile. Managers may fetch any profile in their own org.
 
 **200 OK**
 
@@ -264,19 +928,19 @@ Users may only fetch their own profile. Admins may fetch any profile.
 }
 ```
 
-**403 Forbidden** - requesting another user's profile without admin role.
+**403 Forbidden** - requesting another user's profile without manager role, or targeting a user outside the caller's org.
 **404 Not Found**
 
 ---
 
 ### `PUT /api/users/:id` (auth required)
 
-Update a user's profile.
+Update a user's profile (within the caller's org).
 
 - **Own ID** - users can update their own email and username.
-- **Other ID** - admins can update any user's email, username, role, and elo.
-- **Role change** - admins only; cannot change their own role.
-- **Elo change** - admins only; can change any user's elo.
+- **Other ID** - managers can update any user's email, username, role, and elo **in their org**.
+- **Role change** - managers only; can set `user` or `manager`. Managers cannot change their own role. The `admin` role can never be granted here (admins are created via [`POST /api/admin/admins`](#post-apiadminadmins-admin-required)).
+- **Elo change** - managers only; can change any user's elo in their org.
 
 **Body** (all fields optional)
 
@@ -284,26 +948,26 @@ Update a user's profile.
 {
   "email": "new@example.com",
   "username": "newname",
-  "role": "admin",
+  "role": "manager",
   "elo": 1200
 }
 ```
 
-> `role` and `elo` are admin-only fields. Admins cannot change their own `role`.
+> `role` and `elo` are manager-only fields. Managers cannot change their own `role`.
 
 **200 OK** - returns the updated user object.
 
-**403 Forbidden** - updating another user without admin role, or admin attempting to change their own role, or non-admin attempting to change role/elo.
+**403 Forbidden** - updating another user without manager role, manager attempting to change their own role, non-manager attempting to change role/elo, attempting to set `role: "admin"`, or targeting a user outside the caller's org.
 **404 Not Found**
 
 ---
 
 ### `DELETE /api/users/:id` (auth required)
 
-Delete a user account.
+Delete a user account (within the caller's org).
 
-- **Own ID** - users can delete their own account.
-- **Other ID** - admins can delete any account.
+- **Own ID** - a `user` can delete their own account. **Managers cannot delete their own account** (a co-manager or platform admin must do it).
+- **Other ID** - managers can delete any account in their org.
 
 **200 OK**
 
@@ -311,16 +975,26 @@ Delete a user account.
 { "message": "User deleted successfully" }
 ```
 
-**403 Forbidden** - attempting to delete another user's account without admin role.
+**403 Forbidden** - attempting to delete another user's account without manager role, targeting a user outside the caller's org, or a `manager` attempting to delete their own account.
 **404 Not Found**
+
+> Self-deletion guard: `manager` and `admin` accounts can never delete themselves. This
+> prevents an org or the platform from being left without an operator. Managers are
+> removed by a co-manager or by a platform admin via
+> [`DELETE /api/admin/orgs/:id/managers/:managerId`](#delete-apiadminorgsidmanagersmanagerid-admin-required);
+> admins are removed by another admin via
+> [`DELETE /api/admin/admins/:id`](#delete-apiadminadminsid-admin-required).
 
 ---
 
 ## Players `/api/player/*`
 
+> All player data is **org-scoped** - searches, profiles, and the leaderboard only ever
+> contain players from the caller's org.
+
 ### `GET /api/player/search/:username` (auth required)
 
-Search for players by username (partial match).
+Search for players by username (partial match) within the caller's org.
 
 **200 OK**
 
@@ -342,7 +1016,7 @@ Returns an empty array when no matches are found.
 
 Fetch a public player profile by user ID.
 
-If an admin makes the request, the full profile is returned. If a regular user makes the request, only the `id`, `name`, `elo`, and `createdAt` fields are returned.
+If a `manager` makes the request, the full profile is returned. If a regular user makes the request, only the `id`, `name`, `elo`, and `createdAt` fields are returned. The target must be in the caller's org.
 
 **200 OK** (regular user)
 
@@ -355,7 +1029,7 @@ If an admin makes the request, the full profile is returned. If a regular user m
 }
 ```
 
-**200 OK** (admin)
+**200 OK** (manager)
 
 ```json
 {
@@ -372,7 +1046,16 @@ If an admin makes the request, the full profile is returned. If a regular user m
 
 ### `GET /api/player/leaderboard` (public)
 
-Fetch the top 50 players based on their ELO ratings.
+Fetch the top 50 players **of an org** based on their ELO ratings.
+
+Because this is public (no session), the org must be supplied as a query parameter. When
+called by a logged-in member, the org defaults to the caller's own org.
+
+**Query Parameters**
+
+| Parameter | Type    | Required | Description                                              |
+| --------- | ------- | -------- | -------------------------------------------------------- |
+| `orgId`   | integer | ⚠️       | Required when unauthenticated; ignored when logged in (caller's org is used) |
 
 **200 OK**
 
@@ -399,11 +1082,18 @@ Returns an empty array if no players are found.
 
 ## Games `/api/games/*`
 
+> **Org scoping & roles.** All games belong to an org. Authenticated endpoints are scoped
+> to the caller's org automatically. Every game-management action below is performed by a
+> **`manager`** of the org (these were `admin`-only in the single-tenant app). Platform
+> `admin`s have **no** access to games. Where these docs mention "manager" as the actor,
+> read it as "the org's privileged operator."
+
 ### `GET /api/games` (public)
 
-List all **planned** games with signup count and average elo.
+List an org's **planned** games with signup count and average elo.
 
-> This endpoint only returns games with `planned` status.
+> This endpoint only returns games with `planned` status. When unauthenticated, pass
+> `?orgId=` to choose the org; when logged in, the caller's org is used.
 
 **200 OK**
 
@@ -541,9 +1231,9 @@ Get only the schedule view for a game: rounds, opponents, and field assignments.
 
 ---
 
-### `POST /api/games/create` (admin required)
+### `POST /api/games/create` (manager required)
 
-Create a new game.
+Create a new game. The game is created in the manager's own org (no `orgId` in the body).
 
 **Body** (all fields optional)
 
@@ -562,6 +1252,7 @@ All fields are optional. `name` defaults to `"Unnamed Game"`.
 ```json
 {
   "id": 1,
+  "orgId": 7,
   "name": "Friday Session",
   "description": "Weekly court game",
   "plannedAt": "2026-03-14T14:00:00.000Z",
@@ -596,11 +1287,11 @@ Sign the authenticated user up for a game.
 
 ---
 
-### `POST /api/games/:id/signup/:userId` (admin required)
+### `POST /api/games/:id/signup/:userId` (manager required)
 
-Sign up any user for a game.
+Sign up any user in the org for a game.
 
-When an admin signs up a user, the user is marked as `added_by_admin` and **cannot leave the game**.
+When a manager signs up a user, the user is marked as `added_by_manager` and **cannot leave the game**.
 
 **200 OK**
 
@@ -611,7 +1302,7 @@ When an admin signs up a user, the user is marked as `added_by_admin` and **cann
     "id": 5,
     "gameId": 1,
     "userId": 3,
-    "addedByAdmin": true
+    "addedByManager": true
   }
 }
 ```
@@ -635,51 +1326,14 @@ Remove the authenticated user from a game's participant list.
 ```
 
 **404 Not Found** - game does not exist.
-**403 Forbidden** - user was added by an admin and cannot leave.
+**403 Forbidden** - user was added by a manager and cannot leave.
 **409 Conflict** - user is not signed up.
 
-> **Note**: Users added by an admin cannot leave the game. Admins must remove them using the remove endpoint.
+> **Note**: Users added by a manager cannot leave the game. A manager must remove them using the remove endpoint.
 
 ---
 
-Sign up any user for a game.
-
-**200 OK**
-
-```json
-{
-  "message": "Signed up",
-  "signup": {
-    "id": 5,
-    "gameId": 1,
-    "userId": 3
-  }
-}
-```
-
-**404 Not Found** - game does not exist.
-**409 Conflict** - user is already signed up.
-
----
-
-### `POST /api/games/:id/leave` (auth required)
-
-Remove the authenticated user from a game's participant list.
-
-**200 OK**
-
-```json
-{
-  "message": "Left game"
-}
-```
-
-**404 Not Found** - game does not exist.
-**409 Conflict** - user is not signed up.
-
----
-
-### `POST /api/games/:id/leave/:userId` (admin required)
+### `POST /api/games/:id/leave/:userId` (manager required)
 
 Remove a specific user from a game's participant list.
 
@@ -702,7 +1356,7 @@ Remove a specific user from a game's participant list.
 **404 Not Found** - game does not exist.
 **409 Conflict** - user is not signed up.
 
-> **Note**: When an admin removes a user, the user is recorded in `removed_game_participants` and cannot rejoin this game.
+> **Note**: When a manager removes a user, the user is recorded in `removed_game_participants` and cannot rejoin this game.
 
 ---
 
@@ -725,7 +1379,7 @@ Returns the round number that is currently being played, or `null` if the game h
 
 ---
 
-### `PUT /api/games/:id/current-round` (admin required)
+### `PUT /api/games/:id/current-round` (manager required)
 
 Set the current round for a game (to track progress during play).
 
@@ -866,22 +1520,22 @@ When accepting a request, the requestee is automatically signed up for the game.
 
 ## Match and Participant Management
 
-### Admin-Added Users
+### Manager-Added Users
 
-When an admin signs up a user for a game using `POST /api/games/:id/signup/:userId`, the user:
-- Is marked with `added_by_admin = true`
+When a manager signs up a user for a game using `POST /api/games/:id/signup/:userId`, the user:
+- Is marked with `added_by_manager = true`
 - **Cannot leave the game** - attempting to leave will return **403 Forbidden**
-- Can only be removed by an admin using `POST /api/games/:id/leave/:userId`
+- Can only be removed by a manager using `POST /api/games/:id/leave/:userId`
 
-This is useful for mandatory participation or tournament-style events where admins have direct control.
+This is useful for mandatory participation or tournament-style events where the org's managers have direct control.
 
 ### Removed Users
 
-When an admin removes a user from a game using `POST /api/games/:id/leave/:userId`, the removal is recorded permanently:
+When a manager removes a user from a game using `POST /api/games/:id/leave/:userId`, the removal is recorded permanently:
 - The user is removed from the game's participant list
 - The user is recorded in the `removed_game_participants` table
 - The user **cannot rejoin this specific game** - attempting to sign up will return **403 Forbidden** with message "You have been removed from this game and cannot rejoin"
-- Admins can sign them up again by force using the admin signup endpoint
+- Managers can sign them up again by force using the manager signup endpoint
 
 This prevents accidental rejoinings after removal.
 
@@ -889,7 +1543,7 @@ This prevents accidental rejoinings after removal.
 
 Games track their current round of play:
 - When a game is started, `current_round` is set to **1**
-- Admins can update the current round using `PUT /api/games/:id/current-round` to track progress
+- Managers can update the current round using `PUT /api/games/:id/current-round` to track progress
 - Users can view the current round using `GET /api/games/:id/current-round` to see which round is being played
 
 This is useful for real-time score tracking and tournament management.
@@ -912,7 +1566,7 @@ Request statuses:
 
 ---
 
-### `PUT /api/games/:id/start` (admin required)
+### `PUT /api/games/:id/start` (manager required)
 
 Move the game from `planned` -> `started`. Sets `startedAt` to the current timestamp.
 
@@ -923,7 +1577,7 @@ Move the game from `planned` -> `started`. Sets `startedAt` to the current times
 
 ---
 
-### `PUT /api/games/:id/end` (admin required)
+### `PUT /api/games/:id/end` (manager required)
 
 Move the game from `started` -> `ended`. Sets `endedAt` to the current timestamp.
 
@@ -934,7 +1588,7 @@ Move the game from `started` -> `ended`. Sets `endedAt` to the current timestamp
 
 ---
 
-### `PUT /api/games/:id/process` (admin required)
+### `PUT /api/games/:id/process` (manager required)
 
 Process a finished game: record final scores, calculate ELO changes, and mark the game as `processed`.
 
@@ -1010,14 +1664,15 @@ ELO changes are inserted into `historical_elo`, which fires a database trigger t
 
 ## History `/api/history/*`
 
-All history endpoints require authentication.
+All history endpoints require authentication and are **org-scoped** - they only ever
+return data from the caller's own org.
 
 ### `GET /api/history/games` (auth required)
 
 List all games the authenticated user has participated in.
 
 - **Participated Games** - accessible to the user.
-- **Other Games** - admin required role.
+- **Other Games** - manager required role (within the manager's org).
 
 **200 OK**
 
@@ -1046,7 +1701,7 @@ List all games the authenticated user has participated in.
 Get the full details of a specific game from the authenticated user's history.
 
 - **Participated Games** - accessible to the user.
-- **Other Games** - admin required role.
+- **Other Games** - manager required role (within the manager's org).
 
 **200 OK**
 
@@ -1111,12 +1766,13 @@ Returns `{ "userId": n, "currentElo": 1000, "history": [] }` when no games have 
 
 ### `GET /api/history/elo/:userId` (auth required)
 
-Get the ELO history for any user.
+Get the ELO history for any user **in the caller's org**.
 
-- Any authenticated user can request this endpoint.
+- Any authenticated member of the org can request this for another member of the same org.
 
 **200 OK** - same shape as `GET /api/history/elo`.
 
+**403 Forbidden** - target user is in a different org.
 **404 Not Found** - user does not exist.
 
 ---
@@ -1129,13 +1785,15 @@ Games follow a strict state machine enforced by the API:
 planned --(start)--> started --(end)--> ended --(process)--> processed
 ```
 
-| Transition         | Endpoint                     | Role                   |
-| ------------------ | ---------------------------- | ---------------------- |
-| Create             | `POST /api/games/create`     | Admin                  |
-| planned -> started | `PUT /api/games/:id/start`   | Admin                  |
-| started -> ended   | `PUT /api/games/:id/end`     | Admin                  |
-| ended -> processed | `PUT /api/games/:id/process` | Admin                  |
-| Sign up            | `POST /api/games/:id/signup` | Any authenticated user |
+All transitions are performed by a **manager** of the game's org.
+
+| Transition         | Endpoint                     | Role                        |
+| ------------------ | ---------------------------- | --------------------------- |
+| Create             | `POST /api/games/create`     | Manager                     |
+| planned -> started | `PUT /api/games/:id/start`   | Manager                     |
+| started -> ended   | `PUT /api/games/:id/end`     | Manager                     |
+| ended -> processed | `PUT /api/games/:id/process` | Manager                     |
+| Sign up            | `POST /api/games/:id/signup` | Any authenticated org member |
 
 ---
 
@@ -1156,17 +1814,25 @@ ELO history is permanently stored and available via `GET /api/history/elo`.
 
 ## Role reference
 
-| Role    | Description                                                       |
-| ------- | ----------------------------------------------------------------- |
-| `user`  | Default role assigned on registration                             |
-| `admin` | Full access - create/manage games, process results, view all data |
+| Role      | Belongs to an org? | Description                                                                                              |
+| --------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `user`    | Yes (exactly one)  | Default role assigned on registration. Plays inside their org.                                           |
+| `manager` | Yes (one)          | Runs their own org: create/manage games, process results, manage the org's users, and edit org branding. An org can have several. |
+| `admin`   | No (platform)      | Platform operator. Manages every org's branding and manager/admin accounts, but **not** gameplay data inside any org. |
+
+Each layer reaches exactly one level down: an admin manages orgs and their managers; a
+manager manages everything inside their org; a user plays inside the org.
+
+> **Self-deletion guard:** `manager` and `admin` accounts cannot delete their own account.
 
 ---
 
 ## Auth legend
 
-| Symbol                   | Requirement                                                |
-| ------------------------ | ---------------------------------------------------------- |
-| (requires user auth)     | Requires valid `accessToken` cookie                        |
-| (requires refresh token) | Requires valid `refreshToken` cookie                       |
-| (admin required)         | Requires valid `accessToken` cookie **and** `role = admin` |
+| Symbol                   | Requirement                                                  |
+| ------------------------ | ------------------------------------------------------------ |
+| (public)                 | No authentication required                                   |
+| (auth required)          | Requires valid `accessToken` cookie                          |
+| (requires refresh token) | Requires valid `refreshToken` cookie                         |
+| (manager required)       | Requires valid `accessToken` cookie **and** `role = manager` (scoped to the manager's own org) |
+| (admin required)         | Requires valid `accessToken` cookie **and** `role = admin` (platform-level)                    |
