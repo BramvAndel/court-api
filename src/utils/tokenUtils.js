@@ -6,11 +6,19 @@ const jwt = require("jsonwebtoken");
  * @returns {string} JWT access token
  */
 const generateAccessToken = (user) => {
-  return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "15m" },
-  );
+  const payload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(user, "orgId")) {
+    payload.orgId = user.orgId;
+  }
+
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "15m",
+  });
 };
 
 /**
@@ -19,11 +27,19 @@ const generateAccessToken = (user) => {
  * @returns {string} JWT refresh token
  */
 const generateRefreshToken = (user) => {
-  return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "7d" },
-  );
+  const payload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(user, "orgId")) {
+    payload.orgId = user.orgId;
+  }
+
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "7d",
+  });
 };
 
 /**

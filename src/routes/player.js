@@ -1,12 +1,22 @@
 const express = require("express");
 const playerController = require("../controllers/playerController");
-const { authenticateToken } = require("../middleware/auth");
-const { validateRequest, commonSchemas } = require("../middleware/inputValidation");
+const {
+  authenticateToken,
+  optionalAuthenticateToken,
+} = require("../middleware/auth");
+const {
+  validateRequest,
+  commonSchemas,
+} = require("../middleware/inputValidation");
 
 const router = express.Router();
 
 // Public routes
-router.get("/leaderboard", playerController.getLeaderboard);
+router.get(
+  "/leaderboard",
+  optionalAuthenticateToken,
+  playerController.getLeaderboard,
+);
 
 // Protected routes
 router.get(

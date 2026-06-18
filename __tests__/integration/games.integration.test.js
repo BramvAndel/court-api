@@ -4,13 +4,13 @@
  * These test the game controller with mocked services
  */
 
-const gameController = require('../../src/controllers/gameController');
-const gameService = require('../../src/services/gameService');
-const { testData } = require('../helpers/testUtils');
+const gameController = require("../../src/controllers/gameController");
+const gameService = require("../../src/services/gameService");
+const { testData } = require("../helpers/testUtils");
 
-jest.mock('../../src/services/gameService');
+jest.mock("../../src/services/gameService");
 
-describe('Game Controller Integration Tests', () => {
+describe("Game Controller Integration Tests", () => {
   let req, res;
 
   beforeEach(() => {
@@ -19,7 +19,7 @@ describe('Game Controller Integration Tests', () => {
     req = {
       params: {},
       body: {},
-      user: { id: 1, role: 'user' },
+      user: { id: 1, role: "user", orgId: 7 },
     };
 
     res = {
@@ -28,12 +28,12 @@ describe('Game Controller Integration Tests', () => {
     };
   });
 
-  describe('getAllGames', () => {
-    it('should get all games', async () => {
+  describe("getAllGames", () => {
+    it("should get all games", async () => {
       const games = [
         {
           gameID: 1,
-          name: 'Tennis Tournament',
+          name: "Tennis Tournament",
           maxPlayers: 8,
         },
       ];
@@ -45,9 +45,9 @@ describe('Game Controller Integration Tests', () => {
       expect(res.json).toHaveBeenCalledWith(games);
     });
 
-    it('should handle errors', async () => {
+    it("should handle errors", async () => {
       gameService.getAllGames.mockRejectedValueOnce(
-        new Error('Database error'),
+        new Error("Database error"),
       );
 
       await gameController.getAllGames(req, res);
@@ -56,13 +56,13 @@ describe('Game Controller Integration Tests', () => {
     });
   });
 
-  describe('getGameById', () => {
-    it('should get game by ID', async () => {
-      req.params.id = '1';
+  describe("getGameById", () => {
+    it("should get game by ID", async () => {
+      req.params.id = "1";
 
       const game = {
         gameID: 1,
-        name: 'Tennis Tournament',
+        name: "Tennis Tournament",
         maxPlayers: 8,
       };
 
@@ -70,12 +70,12 @@ describe('Game Controller Integration Tests', () => {
 
       await gameController.getGameById(req, res);
 
-      expect(gameService.getGameById).toHaveBeenCalledWith(1);
+      expect(gameService.getGameById).toHaveBeenCalledWith(1, 7);
       expect(res.json).toHaveBeenCalledWith(game);
     });
 
-    it('should return 404 if game not found', async () => {
-      req.params.id = '999';
+    it("should return 404 if game not found", async () => {
+      req.params.id = "999";
 
       gameService.getGameById.mockResolvedValueOnce(null);
 
@@ -85,9 +85,9 @@ describe('Game Controller Integration Tests', () => {
     });
   });
 
-  describe('getGameSchedule', () => {
-    it('should get game schedule', async () => {
-      req.params.id = '1';
+  describe("getGameSchedule", () => {
+    it("should get game schedule", async () => {
+      req.params.id = "1";
 
       const schedule = {
         gameID: 1,
@@ -97,8 +97,8 @@ describe('Game Controller Integration Tests', () => {
             matches: [
               {
                 field: 1,
-                playerA: { userId: 1, username: 'player1' },
-                playerB: { userId: 2, username: 'player2' },
+                playerA: { userId: 1, username: "player1" },
+                playerB: { userId: 2, username: "player2" },
               },
             ],
           },
@@ -109,11 +109,12 @@ describe('Game Controller Integration Tests', () => {
 
       await gameController.getGameSchedule(req, res);
 
+      expect(gameService.getGameSchedule).toHaveBeenCalledWith(1, 7);
       expect(res.json).toHaveBeenCalledWith(schedule);
     });
 
-    it('should return 404 if game not found', async () => {
-      req.params.id = '999';
+    it("should return 404 if game not found", async () => {
+      req.params.id = "999";
 
       gameService.getGameSchedule.mockResolvedValueOnce(null);
 
@@ -123,10 +124,10 @@ describe('Game Controller Integration Tests', () => {
     });
   });
 
-  describe('createGame', () => {
-    it('should create a new game', async () => {
+  describe("createGame", () => {
+    it("should create a new game", async () => {
       req.body = {
-        name: 'New Tournament',
+        name: "New Tournament",
         maxPlayers: 8,
       };
 
@@ -139,16 +140,19 @@ describe('Game Controller Integration Tests', () => {
 
       await gameController.createGame(req, res);
 
-      expect(gameService.createGame).toHaveBeenCalledWith(req.body, 1);
+      expect(gameService.createGame).toHaveBeenCalledWith(
+        { ...req.body, orgId: 7 },
+        1,
+      );
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(newGame);
     });
 
-    it('should handle creation errors', async () => {
-      req.body = { name: 'Invalid' };
+    it("should handle creation errors", async () => {
+      req.body = { name: "Invalid" };
 
       gameService.createGame.mockRejectedValueOnce(
-        new Error('Invalid game data'),
+        new Error("Invalid game data"),
       );
 
       await gameController.createGame(req, res);
@@ -157,9 +161,9 @@ describe('Game Controller Integration Tests', () => {
     });
   });
 
-  describe('signupForGame', () => {
-    it('should sign up user for game', async () => {
-      req.params.id = '1';
+  describe("signupForGame", () => {
+    it("should sign up user for game", async () => {
+      req.params.id = "1";
 
       const signup = {
         gameID: 1,
@@ -171,14 +175,14 @@ describe('Game Controller Integration Tests', () => {
 
       await gameController.signupForGame(req, res);
 
-      expect(gameService.signupForGame).toHaveBeenCalledWith(1, 1);
+      expect(gameService.signupForGame).toHaveBeenCalledWith(1, 1, null, 7);
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 if game not found', async () => {
-      req.params.id = '999';
+    it("should return 404 if game not found", async () => {
+      req.params.id = "999";
 
-      const error = new Error('Game not found');
+      const error = new Error("Game not found");
       error.status = 404;
       gameService.signupForGame.mockRejectedValueOnce(error);
 
@@ -188,25 +192,25 @@ describe('Game Controller Integration Tests', () => {
     });
   });
 
-  describe('endGame', () => {
-    it('should end a game', async () => {
-      req.params.id = '1';
+  describe("endGame", () => {
+    it("should end a game", async () => {
+      req.params.id = "1";
 
       gameService.endGame.mockResolvedValueOnce({
         gameID: 1,
-        status: 'ended',
+        status: "ended",
       });
 
       await gameController.endGame(req, res);
 
-      expect(gameService.endGame).toHaveBeenCalledWith(1);
+      expect(gameService.endGame).toHaveBeenCalledWith(1, 7);
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 if game not found', async () => {
-      req.params.id = '999';
+    it("should return 404 if game not found", async () => {
+      req.params.id = "999";
 
-      const error = new Error('Game not found');
+      const error = new Error("Game not found");
       error.status = 404;
       gameService.endGame.mockRejectedValueOnce(error);
 

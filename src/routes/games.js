@@ -1,6 +1,10 @@
 const express = require("express");
 const gameController = require("../controllers/gameController");
-const { authenticateToken, authenticateAdmin } = require("../middleware/auth");
+const {
+  authenticateToken,
+  authenticateManager,
+  enforceOrgWriteAccess,
+} = require("../middleware/auth");
 const {
   validateRequest,
   commonSchemas,
@@ -27,12 +31,14 @@ router.get(
 router.post(
   "/:id/signup",
   authenticateToken,
+  enforceOrgWriteAccess,
   validateRequest(commonSchemas.idParam),
   gameController.signupForGame,
 );
 router.post(
   "/:id/leave",
   authenticateToken,
+  enforceOrgWriteAccess,
   validateRequest(commonSchemas.idParam),
   gameController.leaveGame,
 );
@@ -45,6 +51,7 @@ router.get(
 router.post(
   "/:id/match-request",
   authenticateToken,
+  enforceOrgWriteAccess,
   validateRequest(commonSchemas.idParam),
   gameController.sendMatchRequest,
 );
@@ -56,21 +63,24 @@ router.get(
 router.put(
   "/match-requests/:requestId/respond",
   authenticateToken,
+  enforceOrgWriteAccess,
   gameController.respondToMatchRequest,
 );
 
-// Admin routes
+// Manager routes
 router.post(
   "/create",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest(commonSchemas.createGame),
   gameController.createGame,
 );
 router.post(
   "/:id/signup/:userId",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest({
     params: {
       id: commonSchemas.idParam.params.id,
@@ -82,7 +92,8 @@ router.post(
 router.post(
   "/:id/leave/:userId",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest({
     params: {
       id: commonSchemas.idParam.params.id,
@@ -94,21 +105,24 @@ router.post(
 router.put(
   "/:id/start",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest(commonSchemas.idParam),
   gameController.startGame,
 );
 router.put(
   "/:id/end",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest(commonSchemas.idParam),
   gameController.endGame,
 );
 router.put(
   "/:id/process",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest({
     ...commonSchemas.idParam,
     ...commonSchemas.processGame,
@@ -118,7 +132,8 @@ router.put(
 router.put(
   "/:id/current-round",
   authenticateToken,
-  authenticateAdmin,
+  enforceOrgWriteAccess,
+  authenticateManager,
   validateRequest(commonSchemas.idParam),
   gameController.setCurrentRound,
 );

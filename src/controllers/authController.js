@@ -6,7 +6,7 @@ const userService = require("../services/userService");
  */
 const register = async (req, res) => {
   try {
-    const { email, password, username } = req.body;
+    const { orgId, email, password, username } = req.body;
 
     // Validation
     if (!email || !password) {
@@ -15,7 +15,12 @@ const register = async (req, res) => {
         .json({ message: "Email and password are required" });
     }
 
-    const user = await authService.registerUser({ email, password, username });
+    const user = await authService.registerUser({
+      orgId,
+      email,
+      password,
+      username,
+    });
 
     res.status(201).json(user);
   } catch (error) {
@@ -30,7 +35,7 @@ const register = async (req, res) => {
  */
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { orgId, email, password } = req.body;
 
     // Validation
     if (!email || !password) {
@@ -39,7 +44,9 @@ const login = async (req, res) => {
         .json({ message: "Email and password are required" });
     }
 
-    const result = await authService.loginUser(email, password);
+    const result = orgId
+      ? await authService.loginUser(orgId, email, password)
+      : await authService.loginUser(email, password);
 
     // Set HTTP-only cookies
     res.cookie("accessToken", result.accessToken, {
@@ -56,11 +63,52 @@ const login = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    if (result.org) {
+      return res.json({ user: result.user, org: result.org });
+    }
+
     res.json({ user: result.user });
   } catch (error) {
     res
       .status(error.status || 500)
       .json({ message: error.message || "Login failed" });
+  }
+};
+
+/**
+ * Login platform admin
+ */
+const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ message: "Email and password are required" });
+    }
+
+    const result = await authService.loginAdmin(email, password);
+
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.json({ user: result.user });
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || "Admin login failed" });
   }
 };
 
@@ -119,13 +167,35 @@ const logout = async (req, res) => {
  */
 const getProfile = async (req, res) => {
   try {
+    if (req.user.role === "admin") {
+      const adminProfile = {
+        id: req.user.id,
+        orgId: null,
+        email: req.user.email,
+        name: req.user.email.split("@")[0],
+        role: "admin",
+      };
+
+      return res.json(adminProfile);
+    }
+
     const user = await userService.getUserById(req.user.id, true);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.json(user);
+    const memberProfile = {
+      id: user.id,
+      orgId: user.orgId || null,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      elo: user.elo,
+      createdAt: user.createdAt,
+    };
+
+    res.json(memberProfile);
   } catch (error) {
     res
       .status(error.status || 500)
@@ -136,6 +206,7 @@ const getProfile = async (req, res) => {
 module.exports = {
   register,
   login,
+  adminLogin,
   refresh,
   logout,
   getProfile,

@@ -5,7 +5,7 @@ const { query } = require("../config/database");
  * @param {number} userId - User ID
  * @returns {Array} Array of history entries (games)
  */
-const getUserHistory = async (userId) => {
+const getUserHistory = async (userId, orgId = null) => {
   const games = await query(
     `SELECT 
       g.*,
@@ -23,7 +23,15 @@ const getUserHistory = async (userId) => {
     [userId],
   );
 
-  return games.map((game) => ({
+  const filteredGames = orgId
+    ? games.filter(
+        (game) =>
+          !Object.prototype.hasOwnProperty.call(game, "orgID") ||
+          game.orgID === orgId,
+      )
+    : games;
+
+  return filteredGames.map((game) => ({
     id: game.gameID,
     name: game.name,
     description: game.description,
@@ -44,20 +52,42 @@ const getUserHistory = async (userId) => {
  * @param {number} userId - User ID (for authorization)
  * @returns {Object|null} History object or null if not found
  */
-const getHistoryById = async (gameId, userId, isAdmin = false) => {
-  // Check if user participated in this game
-  const participants = await query(
-    "SELECT * FROM game_participants WHERE gameID = ? AND userID = ?",
-    [gameId, userId],
+const getHistoryById = async (
+  gameId,
+  userId,
+  { isManager = false, orgId = null } = {},
+) => {
+  const users = await query(
+    "SELECT userID, orgID FROM users WHERE userID = ?",
+    [userId],
   );
-
-  if (participants.length === 0) {
+  if (users.length === 0) {
     const error = new Error("Access denied");
     error.status = 403;
     throw error;
   }
 
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+  const effectiveOrgId = orgId ?? users[0].orgID ?? null;
+
+  if (!isManager) {
+    const participants = await query(
+      "SELECT * FROM game_participants WHERE gameID = ? AND userID = ?",
+      [gameId, userId],
+    );
+
+    if (participants.length === 0) {
+      const error = new Error("Access denied");
+      error.status = 403;
+      throw error;
+    }
+  }
+
+  const games = effectiveOrgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        effectiveOrgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
 
   if (games.length === 0) {
     return null;
@@ -91,7 +121,7 @@ const getHistoryById = async (gameId, userId, isAdmin = false) => {
         username: p.username,
         score: p.score,
       };
-      if (isAdmin) {
+      if (isManager) {
         participant.email = p.email;
       }
       return participant;
@@ -104,12 +134,22 @@ const getHistoryById = async (gameId, userId, isAdmin = false) => {
  * @param {number} userId - User ID
  * @returns {Array} Array of ELO records over time
  */
-const getUserEloHistory = async (userId) => {
+const getUserEloHistory = async (userId, orgId = null) => {
   // Verify user exists
-  const users = await query("SELECT userID, elo FROM users WHERE userID = ?", [
-    userId,
-  ]);
+  const users = orgId
+    ? await query(
+        "SELECT userID, orgID, elo FROM users WHERE userID = ? AND orgID = ?",
+        [userId, orgId],
+      )
+    : await query("SELECT userID, orgID, elo FROM users WHERE userID = ?", [
+        userId,
+      ]);
   if (users.length === 0) {
+    if (orgId) {
+      const forbidden = new Error("Access denied");
+      forbidden.status = 403;
+      throw forbidden;
+    }
     const error = new Error("User not found");
     error.status = 404;
     throw error;

@@ -3,7 +3,9 @@ const DEFAULT_MAX_STRING_LENGTH = 2000;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9_.-]{3,30}$/;
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/;
+const ISO_DATE_REGEX =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/;
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
 const MALICIOUS_PATTERNS = [
   /<\s*script/gi,
@@ -42,7 +44,10 @@ const sanitizeValue = (value, depth = 0) => {
 
   if (isPlainObject(value)) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, val]) => [key, sanitizeValue(val, depth + 1)]),
+      Object.entries(value).map(([key, val]) => [
+        key,
+        sanitizeValue(val, depth + 1),
+      ]),
     );
   }
 
@@ -117,7 +122,10 @@ const validateField = (value, rules, fieldName) => {
       return buildValidationError(`${fieldName} must be a string`, fieldName);
     }
 
-    const stringValue = sanitizeString(value, rules.maxLength || DEFAULT_MAX_STRING_LENGTH);
+    const stringValue = sanitizeString(
+      value,
+      rules.maxLength || DEFAULT_MAX_STRING_LENGTH,
+    );
 
     if (rules.minLength !== undefined && stringValue.length < rules.minLength) {
       return buildValidationError(
@@ -268,13 +276,19 @@ const commonSchemas = {
   },
   register: {
     body: {
+      orgId: { type: "number", required: true, integer: true, min: 1 },
       email: {
         type: "string",
         required: true,
         maxLength: 255,
         pattern: EMAIL_REGEX,
       },
-      password: { type: "string", required: true, minLength: 6, maxLength: 128 },
+      password: {
+        type: "string",
+        required: true,
+        minLength: 6,
+        maxLength: 128,
+      },
       username: {
         type: "string",
         required: false,
@@ -286,13 +300,35 @@ const commonSchemas = {
   },
   login: {
     body: {
+      orgId: { type: "number", required: true, integer: true, min: 1 },
       email: {
         type: "string",
         required: true,
         maxLength: 255,
         pattern: EMAIL_REGEX,
       },
-      password: { type: "string", required: true, minLength: 6, maxLength: 128 },
+      password: {
+        type: "string",
+        required: true,
+        minLength: 6,
+        maxLength: 128,
+      },
+    },
+  },
+  adminLogin: {
+    body: {
+      email: {
+        type: "string",
+        required: true,
+        maxLength: 255,
+        pattern: EMAIL_REGEX,
+      },
+      password: {
+        type: "string",
+        required: true,
+        minLength: 6,
+        maxLength: 128,
+      },
     },
   },
   updateUser: {
@@ -320,7 +356,7 @@ const commonSchemas = {
       role: {
         type: "string",
         required: false,
-        enum: ["user", "admin"],
+        enum: ["user", "manager"],
       },
       elo: {
         type: "number",
@@ -382,6 +418,126 @@ const commonSchemas = {
         minLength: 1,
         maxLength: 50,
         pattern: /^[a-zA-Z0-9_.\-\s]+$/,
+      },
+    },
+  },
+  createOrg: {
+    body: {
+      name: { type: "string", required: true, minLength: 2, maxLength: 120 },
+      accentColor: {
+        type: "string",
+        required: true,
+        minLength: 7,
+        maxLength: 7,
+        pattern: HEX_COLOR_REGEX,
+      },
+      managerEmail: {
+        type: "string",
+        required: true,
+        maxLength: 255,
+        pattern: EMAIL_REGEX,
+      },
+      managerPassword: {
+        type: "string",
+        required: true,
+        minLength: 6,
+        maxLength: 128,
+      },
+      managerUsername: {
+        type: "string",
+        required: false,
+        minLength: 3,
+        maxLength: 30,
+        pattern: USERNAME_REGEX,
+      },
+    },
+  },
+  simulateOrgPayment: {
+    body: {
+      sessionId: {
+        type: "string",
+        required: true,
+        minLength: 5,
+        maxLength: 80,
+      },
+    },
+  },
+  orgSearch: {
+    query: {
+      q: { type: "string", required: true, minLength: 1, maxLength: 120 },
+    },
+  },
+  updateOrg: {
+    body: {
+      name: { type: "string", required: false, minLength: 2, maxLength: 120 },
+      accentColor: {
+        type: "string",
+        required: false,
+        minLength: 7,
+        maxLength: 7,
+        pattern: HEX_COLOR_REGEX,
+      },
+    },
+  },
+  createManager: {
+    body: {
+      email: {
+        type: "string",
+        required: true,
+        maxLength: 255,
+        pattern: EMAIL_REGEX,
+      },
+      password: {
+        type: "string",
+        required: true,
+        minLength: 6,
+        maxLength: 128,
+      },
+      username: {
+        type: "string",
+        required: false,
+        minLength: 3,
+        maxLength: 30,
+        pattern: USERNAME_REGEX,
+      },
+    },
+  },
+  updateManager: {
+    body: {
+      email: {
+        type: "string",
+        required: false,
+        maxLength: 255,
+        pattern: EMAIL_REGEX,
+      },
+      password: {
+        type: "string",
+        required: false,
+        minLength: 6,
+        maxLength: 128,
+      },
+    },
+  },
+  createAdmin: {
+    body: {
+      email: {
+        type: "string",
+        required: true,
+        maxLength: 255,
+        pattern: EMAIL_REGEX,
+      },
+      password: {
+        type: "string",
+        required: true,
+        minLength: 6,
+        maxLength: 128,
+      },
+      username: {
+        type: "string",
+        required: false,
+        minLength: 3,
+        maxLength: 30,
+        pattern: USERNAME_REGEX,
       },
     },
   },

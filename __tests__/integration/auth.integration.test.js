@@ -4,13 +4,15 @@
  * These test the auth controller with mocked services
  */
 
-const authController = require('../../src/controllers/authController');
-const authService = require('../../src/services/authService');
-const { testData } = require('../helpers/testUtils');
+const authController = require("../../src/controllers/authController");
+const authService = require("../../src/services/authService");
+const userService = require("../../src/services/userService");
+const { testData } = require("../helpers/testUtils");
 
-jest.mock('../../src/services/authService');
+jest.mock("../../src/services/authService");
+jest.mock("../../src/services/userService");
 
-describe('Auth Controller Integration Tests', () => {
+describe("Auth Controller Integration Tests", () => {
   let req, res;
 
   beforeEach(() => {
@@ -30,12 +32,12 @@ describe('Auth Controller Integration Tests', () => {
     };
   });
 
-  describe('register', () => {
-    it('should register a new user successfully', async () => {
+  describe("register", () => {
+    it("should register a new user successfully", async () => {
       const newUser = {
-        email: 'newuser@example.com',
-        password: 'password123',
-        username: 'newuser',
+        email: "newuser@example.com",
+        password: "password123",
+        username: "newuser",
       };
 
       req.body = newUser;
@@ -44,7 +46,7 @@ describe('Auth Controller Integration Tests', () => {
         id: 1,
         email: newUser.email,
         name: newUser.username,
-        role: 'user',
+        role: "user",
       });
 
       await authController.register(req, res);
@@ -57,24 +59,24 @@ describe('Auth Controller Integration Tests', () => {
       );
     });
 
-    it('should return 400 if email is missing', async () => {
-      req.body = { password: 'password123' };
+    it("should return 400 if email is missing", async () => {
+      req.body = { password: "password123" };
 
       await authController.register(req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        message: 'Email and password are required',
+        message: "Email and password are required",
       });
     });
 
-    it('should handle registration errors', async () => {
+    it("should handle registration errors", async () => {
       req.body = {
         email: testData.users.testUser1.email,
-        password: 'password123',
+        password: "password123",
       };
 
-      const error = new Error('Email already exists');
+      const error = new Error("Email already exists");
       error.status = 409;
       authService.registerUser.mockRejectedValueOnce(error);
 
@@ -84,36 +86,36 @@ describe('Auth Controller Integration Tests', () => {
     });
   });
 
-  describe('login', () => {
-    it('should login user successfully', async () => {
+  describe("login", () => {
+    it("should login user successfully", async () => {
       const credentials = {
         email: testData.users.testUser1.email,
-        password: 'correctPassword',
+        password: "correctPassword",
       };
 
       req.body = credentials;
 
       authService.loginUser.mockResolvedValueOnce({
-        accessToken: 'accessToken123',
-        refreshToken: 'refreshToken123',
+        accessToken: "accessToken123",
+        refreshToken: "refreshToken123",
         user: {
           id: 1,
           email: credentials.email,
-          name: 'testuser1',
-          role: 'user',
+          name: "testuser1",
+          role: "user",
         },
       });
 
       await authController.login(req, res);
 
       expect(res.cookie).toHaveBeenCalledWith(
-        'accessToken',
-        'accessToken123',
+        "accessToken",
+        "accessToken123",
         expect.any(Object),
       );
       expect(res.cookie).toHaveBeenCalledWith(
-        'refreshToken',
-        'refreshToken123',
+        "refreshToken",
+        "refreshToken123",
         expect.any(Object),
       );
       expect(res.json).toHaveBeenCalledWith(
@@ -123,21 +125,21 @@ describe('Auth Controller Integration Tests', () => {
       );
     });
 
-    it('should return 400 if credentials are missing', async () => {
-      req.body = { email: 'test@example.com' };
+    it("should return 400 if credentials are missing", async () => {
+      req.body = { email: "test@example.com" };
 
       await authController.login(req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
-    it('should handle login errors', async () => {
+    it("should handle login errors", async () => {
       req.body = {
-        email: 'nonexistent@example.com',
-        password: 'password',
+        email: "nonexistent@example.com",
+        password: "password",
       };
 
-      const error = new Error('Invalid credentials');
+      const error = new Error("Invalid credentials");
       error.status = 401;
       authService.loginUser.mockRejectedValueOnce(error);
 
@@ -147,25 +149,78 @@ describe('Auth Controller Integration Tests', () => {
     });
   });
 
-  describe('refresh', () => {
-    it('should refresh access token', async () => {
+  describe("adminLogin", () => {
+    it("should login admin successfully", async () => {
+      const credentials = {
+        email: "admin@example.com",
+        password: "correctPassword",
+      };
+
+      req.body = credentials;
+
+      authService.loginAdmin.mockResolvedValueOnce({
+        accessToken: "accessToken123",
+        refreshToken: "refreshToken123",
+        user: {
+          id: 3,
+          email: credentials.email,
+          name: "admin",
+          role: "admin",
+        },
+      });
+
+      await authController.adminLogin(req, res);
+
+      expect(res.cookie).toHaveBeenCalledWith(
+        "accessToken",
+        "accessToken123",
+        expect.any(Object),
+      );
+      expect(res.cookie).toHaveBeenCalledWith(
+        "refreshToken",
+        "refreshToken123",
+        expect.any(Object),
+      );
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ user: expect.any(Object) }),
+      );
+    });
+
+    it("should return 403 when non-admin attempts admin login", async () => {
+      req.body = {
+        email: testData.users.testUser1.email,
+        password: "correctPassword",
+      };
+
+      const error = new Error("Only admin accounts can use this endpoint");
+      error.status = 403;
+      authService.loginAdmin.mockRejectedValueOnce(error);
+
+      await authController.adminLogin(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+  });
+
+  describe("refresh", () => {
+    it("should refresh access token", async () => {
       req.cookies.refreshToken = testData.tokens.validRefreshToken;
 
       authService.refreshAccessToken.mockResolvedValueOnce({
-        accessToken: 'newAccessToken',
+        accessToken: "newAccessToken",
       });
 
       await authController.refresh(req, res);
 
       expect(res.cookie).toHaveBeenCalledWith(
-        'accessToken',
-        'newAccessToken',
+        "accessToken",
+        "newAccessToken",
         expect.any(Object),
       );
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 401 if refresh token is missing', async () => {
+    it("should return 401 if refresh token is missing", async () => {
       req.cookies = {};
 
       await authController.refresh(req, res);
@@ -174,8 +229,8 @@ describe('Auth Controller Integration Tests', () => {
     });
   });
 
-  describe('logout', () => {
-    it('should logout user and clear cookies', async () => {
+  describe("logout", () => {
+    it("should logout user and clear cookies", async () => {
       req.cookies.refreshToken = testData.tokens.validRefreshToken;
 
       authService.logoutUser.mockResolvedValueOnce();
@@ -185,9 +240,55 @@ describe('Auth Controller Integration Tests', () => {
       expect(authService.logoutUser).toHaveBeenCalledWith(
         testData.tokens.validRefreshToken,
       );
-      expect(res.clearCookie).toHaveBeenCalledWith('accessToken');
-      expect(res.clearCookie).toHaveBeenCalledWith('refreshToken');
+      expect(res.clearCookie).toHaveBeenCalledWith("accessToken");
+      expect(res.clearCookie).toHaveBeenCalledWith("refreshToken");
+    });
+  });
+
+  describe("getProfile", () => {
+    it("should return normalized admin profile with orgId null and without elo", async () => {
+      req.user = {
+        id: 99,
+        email: "platform-admin@kingofcourt.com",
+        role: "admin",
+      };
+
+      await authController.getProfile(req, res);
+
+      expect(userService.getUserById).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        id: 99,
+        orgId: null,
+        email: "platform-admin@kingofcourt.com",
+        name: "platform-admin",
+        role: "admin",
+      });
+    });
+
+    it("should return member profile including elo", async () => {
+      req.user = { id: 1, role: "user" };
+
+      userService.getUserById.mockResolvedValueOnce({
+        id: 1,
+        orgId: 7,
+        email: "user@example.com",
+        name: "user",
+        role: "user",
+        elo: 1000,
+        createdAt: "2026-06-18T10:00:00.000Z",
+      });
+
+      await authController.getProfile(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        id: 1,
+        orgId: 7,
+        email: "user@example.com",
+        name: "user",
+        role: "user",
+        elo: 1000,
+        createdAt: "2026-06-18T10:00:00.000Z",
+      });
     });
   });
 });
-

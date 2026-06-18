@@ -8,7 +8,7 @@ const { query } = require("../config/database");
  */
 const getUserById = async (userId, isAdmin = false) => {
   const users = await query(
-    "SELECT userID, username, email, role, elo, phone_number, created_at FROM users WHERE userID = ?",
+    "SELECT userID, orgID, username, email, role, elo, phone_number, created_at FROM users WHERE userID = ?",
     [userId],
   );
 
@@ -19,6 +19,9 @@ const getUserById = async (userId, isAdmin = false) => {
   const user = users[0];
   const profile = {
     id: user.userID,
+    orgId: Object.prototype.hasOwnProperty.call(user, "orgID")
+      ? user.orgID
+      : null,
     name: user.username,
     elo: user.elo,
     phone_number: user.phone_number,
@@ -100,11 +103,39 @@ const deleteUser = async (userId) => {
  */
 const getAllUsers = async () => {
   const users = await query(
-    "SELECT userID, username, email, role, elo, phone_number, created_at FROM users",
+    "SELECT userID, orgID, username, email, role, elo, phone_number, created_at FROM users",
   );
 
   return users.map((user) => ({
     id: user.userID,
+    orgId: Object.prototype.hasOwnProperty.call(user, "orgID")
+      ? user.orgID
+      : null,
+    email: user.email,
+    name: user.username,
+    role: user.role,
+    elo: user.elo,
+    phone_number: user.phone_number,
+    createdAt: user.created_at,
+  }));
+};
+
+/**
+ * Get all users in an organization
+ * @param {number} orgId - Organization ID
+ * @returns {Array} Array of users without passwords
+ */
+const getAllUsersByOrgId = async (orgId) => {
+  const users = await query(
+    "SELECT userID, orgID, username, email, role, elo, phone_number, created_at FROM users WHERE orgID = ?",
+    [orgId],
+  );
+
+  return users.map((user) => ({
+    id: user.userID,
+    orgId: Object.prototype.hasOwnProperty.call(user, "orgID")
+      ? user.orgID
+      : null,
     email: user.email,
     name: user.username,
     role: user.role,
@@ -121,12 +152,38 @@ const getAllUsers = async () => {
  */
 const searchUsersByUsername = async (searchTerm) => {
   const users = await query(
-    "SELECT userID, username, elo, phone_number FROM users WHERE username LIKE ?",
+    "SELECT userID, orgID, username, elo, phone_number FROM users WHERE username LIKE ?",
     [`%${searchTerm}%`],
   );
 
   return users.map((user) => ({
     id: user.userID,
+    orgId: Object.prototype.hasOwnProperty.call(user, "orgID")
+      ? user.orgID
+      : null,
+    name: user.username,
+    elo: user.elo,
+    phone_number: user.phone_number,
+  }));
+};
+
+/**
+ * Search users by username within an organization
+ * @param {number} orgId - Organization ID
+ * @param {string} searchTerm - Search term
+ * @returns {Array} Array of matching users
+ */
+const searchUsersByUsernameInOrg = async (orgId, searchTerm) => {
+  const users = await query(
+    "SELECT userID, orgID, username, elo, phone_number FROM users WHERE orgID = ? AND username LIKE ?",
+    [orgId, `%${searchTerm}%`],
+  );
+
+  return users.map((user) => ({
+    id: user.userID,
+    orgId: Object.prototype.hasOwnProperty.call(user, "orgID")
+      ? user.orgID
+      : null,
     name: user.username,
     elo: user.elo,
     phone_number: user.phone_number,
@@ -139,7 +196,29 @@ const searchUsersByUsername = async (searchTerm) => {
  */
 const getLeaderboard = async () => {
   const users = await query(
-    "SELECT userID, username, elo FROM users ORDER BY elo DESC, username ASC LIMIT 50",
+    "SELECT userID, orgID, username, elo FROM users ORDER BY elo DESC, username ASC LIMIT 50",
+  );
+
+  return users.map((user, index) => ({
+    id: user.userID,
+    orgId: Object.prototype.hasOwnProperty.call(user, "orgID")
+      ? user.orgID
+      : null,
+    rank: index + 1,
+    name: user.username,
+    elo: user.elo,
+  }));
+};
+
+/**
+ * Get leaderboard for a specific org - top 50 players by ELO
+ * @param {number} orgId - Organization ID
+ * @returns {Array} Array of top players with rank
+ */
+const getLeaderboardByOrgId = async (orgId) => {
+  const users = await query(
+    "SELECT userID, orgID, username, elo FROM users WHERE orgID = ? ORDER BY elo DESC, username ASC LIMIT 50",
+    [orgId],
   );
 
   return users.map((user, index) => ({
@@ -155,6 +234,9 @@ module.exports = {
   updateUser,
   deleteUser,
   getAllUsers,
+  getAllUsersByOrgId,
   searchUsersByUsername,
+  searchUsersByUsernameInOrg,
   getLeaderboard,
+  getLeaderboardByOrgId,
 };

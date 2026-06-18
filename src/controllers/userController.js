@@ -5,7 +5,9 @@ const userService = require("../services/userService");
  */
 const getAllUsers = async (req, res) => {
   try {
-    const users = await userService.getAllUsers();
+    const users = req.user.orgId
+      ? await userService.getAllUsersByOrgId(req.user.orgId)
+      : await userService.getAllUsers();
     res.json(users);
   } catch (error) {
     res
@@ -20,17 +22,30 @@ const getAllUsers = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
+    const isManager = req.user.role === "manager";
+    const isSelf = req.user.id === userId;
+    const isAdmin = req.user.role === "admin";
 
-    // Authorization check first - users can only view their own profile unless admin
-    if (req.user.id !== userId && req.user.role !== "admin") {
+    if (!isSelf && !isManager && !isAdmin) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // Pass true to get full user details since we've verified authorization
-    const user = await userService.getUserById(userId, true);
+    const user = await userService.getUserById(
+      userId,
+      isManager || isAdmin || isSelf,
+    );
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    if (
+      req.user.orgId &&
+      user.orgId &&
+      req.user.orgId !== user.orgId &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     res.json(user);
@@ -48,20 +63,40 @@ const updateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const isAdmin = req.user.role === "admin";
+    const isManager = req.user.role === "manager";
     const isSelf = req.user.id === userId;
     const hasOwn = (field) =>
       Object.prototype.hasOwnProperty.call(req.body, field);
 
-    if (!isSelf && !isAdmin) {
+    if (req.user.orgId) {
+      const targetUser = await userService.getUserById(userId, true);
+
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (targetUser.orgId && req.user.orgId !== targetUser.orgId && !isAdmin) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    if (!isSelf && !isAdmin && !isManager) {
       return res.status(403).json({ message: "Access denied" });
     }
-    if (!isAdmin && (hasOwn("role") || hasOwn("elo"))) {
+    if (!isAdmin && !isManager && (hasOwn("role") || hasOwn("elo"))) {
       return res.status(403).json({ message: "Access denied" });
     }
-    if (isAdmin && isSelf && hasOwn("role")) {
+    if ((isAdmin || isManager) && isSelf && hasOwn("role")) {
       return res
         .status(403)
-        .json({ message: "Admins cannot change their own role" });
+        .json({ message: "Managers and admins cannot change their own role" });
+    }
+    if (hasOwn("role") && req.body.role === "admin") {
+      return res
+        .status(403)
+        .json({
+          message: "The admin role can only be managed via /api/admin/admins",
+        });
     }
 
     const user = await userService.updateUser(userId, req.body, true);
@@ -84,6 +119,35 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
+    const isAdmin = req.user.role === "admin";
+    const isManager = req.user.role === "manager";
+    const isSelf = req.user.id === userId;
+
+    if (req.user.orgId) {
+      const targetUser = await userService.getUserById(userId, true);
+
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (targetUser.orgId && req.user.orgId !== targetUser.orgId && !isAdmin) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    if (!isSelf && !isManager && !isAdmin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user.id === userId &&
+      ["admin", "manager"].includes(req.user.role)
+    ) {
+      return res.status(403).json({
+        message:
+          "Managers and admins cannot delete their own account. Ask another operator to remove it.",
+      });
+    }
 
     const success = await userService.deleteUser(userId);
 

@@ -16,6 +16,8 @@ const userRoutes = require("./routes/users");
 const gameRoutes = require("./routes/games");
 const historyRoutes = require("./routes/history");
 const playerRoutes = require("./routes/player");
+const orgRoutes = require("./routes/orgs");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 
@@ -65,6 +67,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/games", gameRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/player", playerRoutes);
+app.use("/api/orgs", orgRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Basic health check route
 app.get("/", (req, res) => {

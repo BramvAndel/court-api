@@ -20,7 +20,7 @@ const getAllGames = async (req, res) => {
 const getGameById = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const game = await gameService.getGameById(gameId);
+    const game = await gameService.getGameById(gameId, req.user?.orgId || null);
 
     if (!game) {
       return res.status(404).json({ message: "Game not found" });
@@ -40,7 +40,10 @@ const getGameById = async (req, res) => {
 const getGameSchedule = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const schedule = await gameService.getGameSchedule(gameId);
+    const schedule = await gameService.getGameSchedule(
+      gameId,
+      req.user?.orgId || null,
+    );
 
     if (!schedule) {
       return res.status(404).json({ message: "Game not found" });
@@ -55,12 +58,15 @@ const getGameSchedule = async (req, res) => {
 };
 
 /**
- * Create a new game (admin only)
+ * Create a new game (manager only)
  */
 const createGame = async (req, res) => {
   try {
     const gameData = req.body;
-    const game = await gameService.createGame(gameData, req.user.id);
+    const game = await gameService.createGame(
+      { ...gameData, orgId: req.user.orgId || gameData.orgId || null },
+      req.user.id,
+    );
 
     res.status(201).json(game);
   } catch (error) {
@@ -76,7 +82,12 @@ const createGame = async (req, res) => {
 const signupForGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const signup = await gameService.signupForGame(gameId, req.user.id);
+    const signup = await gameService.signupForGame(
+      gameId,
+      req.user.id,
+      null,
+      req.user.orgId || null,
+    );
 
     res.json({ message: "Signed up", signup });
   } catch (error) {
@@ -87,13 +98,18 @@ const signupForGame = async (req, res) => {
 };
 
 /**
- * Sign up another user for a game (admin only)
+ * Sign up another user for a game (manager only)
  */
 const signupUserForGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
     const userId = parseInt(req.params.userId);
-    const signup = await gameService.signupForGame(gameId, userId, req.user.id);
+    const signup = await gameService.signupForGame(
+      gameId,
+      userId,
+      req.user.id,
+      req.user.orgId || null,
+    );
 
     res.json({ message: "Signed up", signup });
   } catch (error) {
@@ -109,7 +125,7 @@ const signupUserForGame = async (req, res) => {
 const leaveGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    await gameService.leaveGame(gameId, req.user.id);
+    await gameService.leaveGame(gameId, req.user.id, req.user.orgId || null);
 
     res.json({ message: "Left game" });
   } catch (error) {
@@ -120,14 +136,20 @@ const leaveGame = async (req, res) => {
 };
 
 /**
- * Remove a specific user from a game (admin only)
+ * Remove a specific user from a game (manager only)
  */
 const removeUserFromGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
     const userId = parseInt(req.params.userId);
     const { reason } = req.body || {};
-    await gameService.removeUserFromGameAsAdmin(gameId, userId, req.user.id, reason);
+    await gameService.removeUserFromGameAsAdmin(
+      gameId,
+      userId,
+      req.user.id,
+      reason,
+      req.user.orgId || null,
+    );
 
     res.json({ message: "User removed from game" });
   } catch (error) {
@@ -138,12 +160,12 @@ const removeUserFromGame = async (req, res) => {
 };
 
 /**
- * Start a game (admin only) — moves status from 'planned' to 'started'
+ * Start a game (manager only) — moves status from 'planned' to 'started'
  */
 const startGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const game = await gameService.startGame(gameId);
+    const game = await gameService.startGame(gameId, req.user.orgId || null);
     res.json(game);
   } catch (error) {
     res
@@ -153,12 +175,12 @@ const startGame = async (req, res) => {
 };
 
 /**
- * End a game (admin only) — moves status from 'started' to 'ended'
+ * End a game (manager only) — moves status from 'started' to 'ended'
  */
 const endGame = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const game = await gameService.endGame(gameId);
+    const game = await gameService.endGame(gameId, req.user.orgId || null);
     res.json(game);
   } catch (error) {
     res
@@ -168,7 +190,7 @@ const endGame = async (req, res) => {
 };
 
 /**
- * Process a game (admin only) — records scores, calculates ELO, marks 'processed'
+ * Process a game (manager only) — records scores, calculates ELO, marks 'processed'
  * Body: { winnerId: number, scores: [{ userId: number, score: number }] }
  */
 const processGame = async (req, res) => {
@@ -183,7 +205,12 @@ const processGame = async (req, res) => {
       return res.status(400).json({ message: "scores array is required" });
     }
 
-    const result = await gameService.processGame(gameId, winnerId, scores);
+    const result = await gameService.processGame(
+      gameId,
+      winnerId,
+      scores,
+      req.user.orgId || null,
+    );
     res.json(result);
   } catch (error) {
     res
@@ -198,7 +225,10 @@ const processGame = async (req, res) => {
 const getCurrentRound = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const currentRound = await gameService.getCurrentRound(gameId);
+    const currentRound = await gameService.getCurrentRound(
+      gameId,
+      req.user?.orgId || null,
+    );
 
     res.json({ gameId, currentRound });
   } catch (error) {
@@ -209,7 +239,7 @@ const getCurrentRound = async (req, res) => {
 };
 
 /**
- * Set current round for a game (admin only)
+ * Set current round for a game (manager only)
  */
 const setCurrentRound = async (req, res) => {
   try {
@@ -217,10 +247,16 @@ const setCurrentRound = async (req, res) => {
     const { roundNumber } = req.body;
 
     if (!roundNumber || roundNumber < 1) {
-      return res.status(400).json({ message: "roundNumber must be at least 1" });
+      return res
+        .status(400)
+        .json({ message: "roundNumber must be at least 1" });
     }
 
-    const result = await gameService.setCurrentRound(gameId, roundNumber);
+    const result = await gameService.setCurrentRound(
+      gameId,
+      roundNumber,
+      req.user.orgId || null,
+    );
     res.json(result);
   } catch (error) {
     res
@@ -238,7 +274,9 @@ const sendMatchRequest = async (req, res) => {
     const { requestedForUserId, message } = req.body;
 
     if (!requestedForUserId) {
-      return res.status(400).json({ message: "requestedForUserId is required" });
+      return res
+        .status(400)
+        .json({ message: "requestedForUserId is required" });
     }
 
     const result = await gameService.sendMatchRequest(
@@ -246,6 +284,7 @@ const sendMatchRequest = async (req, res) => {
       req.user.id,
       requestedForUserId,
       message,
+      req.user.orgId || null,
     );
 
     res.status(201).json(result);
@@ -268,7 +307,12 @@ const respondToMatchRequest = async (req, res) => {
       return res.status(400).json({ message: "status is required" });
     }
 
-    const result = await gameService.respondToMatchRequest(requestId, status);
+    const result = await gameService.respondToMatchRequest(
+      requestId,
+      status,
+      req.user.id,
+      req.user.orgId || null,
+    );
     res.json(result);
   } catch (error) {
     res
@@ -283,7 +327,11 @@ const respondToMatchRequest = async (req, res) => {
 const getMatchRequests = async (req, res) => {
   try {
     const { status } = req.query;
-    const requests = await gameService.getMatchRequests(req.user.id, status);
+    const requests = await gameService.getMatchRequests(
+      req.user.id,
+      status,
+      req.user.orgId || null,
+    );
 
     res.json(requests);
   } catch (error) {

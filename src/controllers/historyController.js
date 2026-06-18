@@ -5,7 +5,10 @@ const historyService = require("../services/historyService");
  */
 const getUserHistory = async (req, res) => {
   try {
-    const history = await historyService.getUserHistory(req.user.id);
+    const history = await historyService.getUserHistory(
+      req.user.id,
+      req.user.orgId || null,
+    );
     res.json(history);
   } catch (error) {
     res
@@ -20,8 +23,11 @@ const getUserHistory = async (req, res) => {
 const getHistoryById = async (req, res) => {
   try {
     const gameId = parseInt(req.params.id);
-    const isAdmin = req.user.role === "admin";
-    const entry = await historyService.getHistoryById(gameId, req.user.id, isAdmin);
+    const isManager = req.user.role === "manager";
+    const entry = await historyService.getHistoryById(gameId, req.user.id, {
+      isManager,
+      orgId: req.user.orgId || null,
+    });
 
     if (!entry) {
       return res.status(404).json({ message: "History entry not found" });
@@ -40,7 +46,10 @@ const getHistoryById = async (req, res) => {
  */
 const getUserEloHistory = async (req, res) => {
   try {
-    const eloHistory = await historyService.getUserEloHistory(req.user.id);
+    const eloHistory = await historyService.getUserEloHistory(
+      req.user.id,
+      req.user.orgId || null,
+    );
     res.json(eloHistory);
   } catch (error) {
     res
@@ -56,7 +65,10 @@ const getPlayerEloHistory = async (req, res) => {
   try {
     const targetId = parseInt(req.params.userId);
 
-    const eloHistory = await historyService.getUserEloHistory(targetId);
+    const eloHistory = await historyService.getUserEloHistory(
+      targetId,
+      req.user.orgId || null,
+    );
     res.json(eloHistory);
   } catch (error) {
     res

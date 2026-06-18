@@ -115,22 +115,37 @@ const buildRoundRobinSchedule = (participants) => {
  * @returns {Object} Created game object
  */
 const createGame = async (gameData, creatorId) => {
-  const { name, description, plannedAt, startedAt, endedAt, status } = gameData;
+  const { name, description, plannedAt, startedAt, endedAt, status, orgId } =
+    gameData;
 
-  const result = await query(
-    "INSERT INTO games (name, description, plannedAt, startedAt, endedAt, createdBy) VALUES (?, ?, ?, ?, ?, ?)",
-    [
-      name || "Unnamed Game",
-      description || null,
-      plannedAt || null,
-      startedAt || null,
-      endedAt || null,
-      creatorId,
-    ],
-  );
+  const result = orgId
+    ? await query(
+        "INSERT INTO games (orgID, name, description, plannedAt, startedAt, endedAt, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          orgId,
+          name || "Unnamed Game",
+          description || null,
+          plannedAt || null,
+          startedAt || null,
+          endedAt || null,
+          creatorId,
+        ],
+      )
+    : await query(
+        "INSERT INTO games (name, description, plannedAt, startedAt, endedAt, createdBy) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          name || "Unnamed Game",
+          description || null,
+          plannedAt || null,
+          startedAt || null,
+          endedAt || null,
+          creatorId,
+        ],
+      );
 
   return {
     id: result.insertId,
+    orgId: orgId || null,
     name: name || "Unnamed Game",
     description,
     plannedAt: plannedAt || null,
@@ -204,8 +219,13 @@ const getAllGames = async () => {
  * @param {number} gameId - Game ID
  * @returns {Object|null} Game object or null if not found
  */
-const getGameById = async (gameId) => {
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+const getGameById = async (gameId, orgId = null) => {
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
 
   if (games.length === 0) {
     return null;
@@ -250,8 +270,8 @@ const getGameById = async (gameId) => {
  * @param {number} gameId - Game ID
  * @returns {Object|null} Schedule object or null if game not found
  */
-const getGameSchedule = async (gameId) => {
-  const game = await getGameById(gameId);
+const getGameSchedule = async (gameId, orgId = null) => {
+  const game = await getGameById(gameId, orgId);
 
   if (!game) {
     return null;
@@ -271,13 +291,35 @@ const getGameSchedule = async (gameId) => {
  * Sign up for a game
  * @param {number} gameId - Game ID
  * @param {number} userId - User ID
- * @param {number} adminId - Admin ID (optional, if added by admin)
+ * @param {number} managerId - Manager ID (optional, if added by manager)
  * @returns {Object} Signup object
  * @throws {Error} If already signed up or game not found
  */
-const signupForGame = async (gameId, userId, adminId = null) => {
+const signupForGame = async (
+  gameId,
+  userId,
+  managerId = null,
+  orgId = null,
+) => {
   // Check if game exists
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+  if (orgId) {
+    const users = await query(
+      "SELECT userID FROM users WHERE userID = ? AND orgID = ?",
+      [userId, orgId],
+    );
+
+    if (users.length === 0) {
+      const error = new Error("User not found in organization");
+      error.status = 404;
+      throw error;
+    }
+  }
 
   if (games.length === 0) {
     const error = new Error("Game not found");
@@ -292,7 +334,9 @@ const signupForGame = async (gameId, userId, adminId = null) => {
   );
 
   if (removedCheck.length > 0) {
-    const error = new Error("You have been removed from this game and cannot rejoin");
+    const error = new Error(
+      "You have been removed from this game and cannot rejoin",
+    );
     error.status = 403;
     throw error;
   }
@@ -311,14 +355,14 @@ const signupForGame = async (gameId, userId, adminId = null) => {
 
   const result = await query(
     "INSERT INTO game_participants (gameID, userID, added_by_admin, added_by_admin_id) VALUES (?, ?, ?, ?)",
-    [gameId, userId, adminId ? 1 : 0, adminId || null],
+    [gameId, userId, managerId ? 1 : 0, managerId || null],
   );
 
   return {
     id: result.insertId,
     gameId,
     userId,
-    addedByAdmin: adminId ? true : false,
+    addedByManager: managerId ? true : false,
   };
 };
 
@@ -326,11 +370,16 @@ const signupForGame = async (gameId, userId, adminId = null) => {
  * Remove a user from a game
  * @param {number} gameId - Game ID
  * @param {number} userId - User ID
- * @throws {Error} If not signed up, game not found, or user was added by admin
+ * @throws {Error} If not signed up, game not found, or user was added by manager
  */
-const leaveGame = async (gameId, userId) => {
+const leaveGame = async (gameId, userId, orgId = null) => {
   // Check if game exists
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
 
   if (games.length === 0) {
     const error = new Error("Game not found");
@@ -350,10 +399,12 @@ const leaveGame = async (gameId, userId) => {
     throw error;
   }
 
-  // Check if user was added by admin - they cannot leave
+  // Check if user was added by manager - they cannot leave
   const participant = existingSignups[0];
   if (participant.added_by_admin) {
-    const error = new Error("You cannot leave this game because you were added by an admin");
+    const error = new Error(
+      "You cannot leave this game because you were added by a manager",
+    );
     error.status = 403;
     throw error;
   }
@@ -389,8 +440,13 @@ const calculateElo = (ratingA, ratingB, scoreA, K = 32) => {
  * @param {number} gameId
  * @returns {Object} Updated game
  */
-const startGame = async (gameId) => {
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+const startGame = async (gameId, orgId = null) => {
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
   if (games.length === 0) {
     const error = new Error("Game not found");
     error.status = 404;
@@ -410,7 +466,12 @@ const startGame = async (gameId) => {
   );
 
   return {
-    ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
+    ...(orgId
+      ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+          gameId,
+          orgId,
+        ])
+      : await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
   };
 };
 
@@ -419,8 +480,13 @@ const startGame = async (gameId) => {
  * @param {number} gameId
  * @returns {Object} Updated game
  */
-const endGame = async (gameId) => {
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+const endGame = async (gameId, orgId = null) => {
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
   if (games.length === 0) {
     const error = new Error("Game not found");
     error.status = 404;
@@ -440,7 +506,12 @@ const endGame = async (gameId) => {
   );
 
   return {
-    ...(await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
+    ...(orgId
+      ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+          gameId,
+          orgId,
+        ])
+      : await query("SELECT * FROM games WHERE gameID = ?", [gameId]))[0],
   };
 };
 
@@ -453,12 +524,15 @@ const endGame = async (gameId) => {
  * @param {Array}  scores   - [{ userId, score }] — final scores per participant
  * @returns {Object} Summary of ELO changes
  */
-const processGame = async (gameId, winnerId, scores) => {
+const processGame = async (gameId, winnerId, scores, orgId = null) => {
   return transaction(async (conn) => {
     // 1. Validate game state
-    const [game] = await conn.execute("SELECT * FROM games WHERE gameID = ?", [
-      gameId,
-    ]);
+    const [game] = orgId
+      ? await conn.execute(
+          "SELECT * FROM games WHERE gameID = ? AND orgID = ?",
+          [gameId, orgId],
+        )
+      : await conn.execute("SELECT * FROM games WHERE gameID = ?", [gameId]);
     if (game.length === 0) {
       const error = new Error("Game not found");
       error.status = 404;
@@ -579,14 +653,33 @@ module.exports = {
 };
 
 /**
- * Remove a user from a game (admin only) and record in removed_game_participants
+ * Remove a user from a game (manager only) and record in removed_game_participants
  * @param {number} gameId - Game ID
  * @param {number} userId - User ID to remove
- * @param {number} adminId - Admin ID performing the removal
+ * @param {number} managerId - Manager ID performing the removal
  * @param {string} reason - Reason for removal (optional)
  * @throws {Error} If user not found in game
  */
-async function removeUserFromGameAsAdmin(gameId, userId, adminId, reason = null) {
+async function removeUserFromGameAsAdmin(
+  gameId,
+  userId,
+  managerId,
+  reason = null,
+  orgId = null,
+) {
+  const games = orgId
+    ? await query("SELECT gameID FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT gameID FROM games WHERE gameID = ?", [gameId]);
+
+  if (games.length === 0) {
+    const error = new Error("Game not found");
+    error.status = 404;
+    throw error;
+  }
+
   // Check if user is signed up
   const existingSignups = await query(
     "SELECT * FROM game_participants WHERE gameID = ? AND userID = ?",
@@ -608,7 +701,7 @@ async function removeUserFromGameAsAdmin(gameId, userId, adminId, reason = null)
   // Record removal in removed_game_participants
   await query(
     "INSERT INTO removed_game_participants (gameID, userID, removed_by_admin_id, reason) VALUES (?, ?, ?, ?)",
-    [gameId, userId, adminId, reason],
+    [gameId, userId, managerId, reason],
   );
 }
 
@@ -617,8 +710,13 @@ async function removeUserFromGameAsAdmin(gameId, userId, adminId, reason = null)
  * @param {number} gameId - Game ID
  * @returns {number|null} Current round number or null if not started
  */
-async function getCurrentRound(gameId) {
-  const games = await query("SELECT current_round FROM games WHERE gameID = ?", [gameId]);
+async function getCurrentRound(gameId, orgId = null) {
+  const games = orgId
+    ? await query(
+        "SELECT current_round FROM games WHERE gameID = ? AND orgID = ?",
+        [gameId, orgId],
+      )
+    : await query("SELECT current_round FROM games WHERE gameID = ?", [gameId]);
 
   if (games.length === 0) {
     const error = new Error("Game not found");
@@ -635,8 +733,13 @@ async function getCurrentRound(gameId) {
  * @param {number} roundNumber - Round number to set
  * @throws {Error} If game not found or invalid round
  */
-async function setCurrentRound(gameId, roundNumber) {
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+async function setCurrentRound(gameId, roundNumber, orgId = null) {
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
 
   if (games.length === 0) {
     const error = new Error("Game not found");
@@ -650,7 +753,10 @@ async function setCurrentRound(gameId, roundNumber) {
     throw error;
   }
 
-  await query("UPDATE games SET current_round = ? WHERE gameID = ?", [roundNumber, gameId]);
+  await query("UPDATE games SET current_round = ? WHERE gameID = ?", [
+    roundNumber,
+    gameId,
+  ]);
 
   return { gameId, currentRound: roundNumber };
 }
@@ -663,9 +769,20 @@ async function setCurrentRound(gameId, roundNumber) {
  * @param {string} message - Optional message with the request
  * @returns {Object} Created match request
  */
-async function sendMatchRequest(gameId, requestedByUserId, requestedForUserId, message = null) {
+async function sendMatchRequest(
+  gameId,
+  requestedByUserId,
+  requestedForUserId,
+  message = null,
+  orgId = null,
+) {
   // Check if game exists
-  const games = await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
+  const games = orgId
+    ? await query("SELECT * FROM games WHERE gameID = ? AND orgID = ?", [
+        gameId,
+        orgId,
+      ])
+    : await query("SELECT * FROM games WHERE gameID = ?", [gameId]);
   if (games.length === 0) {
     const error = new Error("Game not found");
     error.status = 404;
@@ -673,10 +790,15 @@ async function sendMatchRequest(gameId, requestedByUserId, requestedForUserId, m
   }
 
   // Check if both users exist
-  const users = await query(
-    "SELECT userID FROM users WHERE userID IN (?, ?)",
-    [requestedByUserId, requestedForUserId],
-  );
+  const users = orgId
+    ? await query(
+        "SELECT userID FROM users WHERE orgID = ? AND userID IN (?, ?)",
+        [orgId, requestedByUserId, requestedForUserId],
+      )
+    : await query("SELECT userID FROM users WHERE userID IN (?, ?)", [
+        requestedByUserId,
+        requestedForUserId,
+      ]);
 
   if (users.length !== 2) {
     const error = new Error("One or both users not found");
@@ -718,14 +840,25 @@ async function sendMatchRequest(gameId, requestedByUserId, requestedForUserId, m
  * @param {string} status - 'accepted' or 'rejected'
  * @returns {Object} Updated match request
  */
-async function respondToMatchRequest(requestId, status) {
+async function respondToMatchRequest(
+  requestId,
+  status,
+  userId = null,
+  orgId = null,
+) {
   if (!["accepted", "rejected"].includes(status)) {
     const error = new Error("Status must be 'accepted' or 'rejected'");
     error.status = 422;
     throw error;
   }
 
-  const requests = await query("SELECT * FROM match_requests WHERE id = ?", [requestId]);
+  const requests = await query(
+    `SELECT mr.*
+     FROM match_requests mr
+     JOIN games g ON g.gameID = mr.gameID
+     WHERE mr.id = ?${orgId ? " AND g.orgID = ?" : ""}`,
+    orgId ? [requestId, orgId] : [requestId],
+  );
 
   if (requests.length === 0) {
     const error = new Error("Match request not found");
@@ -735,18 +868,35 @@ async function respondToMatchRequest(requestId, status) {
 
   const request = requests[0];
 
+  if (userId && request.requested_for_user_id !== userId) {
+    const error = new Error("Access denied");
+    error.status = 403;
+    throw error;
+  }
+
   // If accepting, sign up the user for the game
   if (status === "accepted") {
     try {
-      await signupForGame(request.gameID, request.requested_for_user_id);
+      await signupForGame(
+        request.gameID,
+        request.requested_for_user_id,
+        null,
+        orgId,
+      );
     } catch (error) {
       // If signup fails, still update the request status but throw error
-      await query("UPDATE match_requests SET status = ? WHERE id = ?", [status, requestId]);
+      await query("UPDATE match_requests SET status = ? WHERE id = ?", [
+        status,
+        requestId,
+      ]);
       throw error;
     }
   }
 
-  await query("UPDATE match_requests SET status = ? WHERE id = ?", [status, requestId]);
+  await query("UPDATE match_requests SET status = ? WHERE id = ?", [
+    status,
+    requestId,
+  ]);
 
   return {
     id: requestId,
@@ -764,7 +914,7 @@ async function respondToMatchRequest(requestId, status) {
  * @param {string} status - Filter by status ('pending', 'accepted', 'rejected', 'cancelled')
  * @returns {Array} Array of match requests
  */
-async function getMatchRequests(userId, status = null) {
+async function getMatchRequests(userId, status = null, orgId = null) {
   let query_string = `
     SELECT mr.*, g.name as game_name, u.username as requested_by_username
     FROM match_requests mr
@@ -773,6 +923,11 @@ async function getMatchRequests(userId, status = null) {
     WHERE mr.requested_for_user_id = ?
   `;
   const params = [userId];
+
+  if (orgId) {
+    query_string += " AND g.orgID = ?";
+    params.push(orgId);
+  }
 
   if (status) {
     query_string += " AND mr.status = ?";
