@@ -1,4 +1,5 @@
 const { query, transaction } = require("../config/database");
+const { toMySQLDateTime } = require("../utils/dateUtils");
 
 /**
  * Build a round-robin schedule for the provided participants.
@@ -118,6 +119,10 @@ const createGame = async (gameData, creatorId) => {
   const { name, description, plannedAt, startedAt, endedAt, status, orgId } =
     gameData;
 
+  const plannedAtDb = toMySQLDateTime(plannedAt);
+  const startedAtDb = toMySQLDateTime(startedAt);
+  const endedAtDb = toMySQLDateTime(endedAt);
+
   const result = orgId
     ? await query(
         "INSERT INTO games (orgID, name, description, plannedAt, startedAt, endedAt, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -125,9 +130,9 @@ const createGame = async (gameData, creatorId) => {
           orgId,
           name || "Unnamed Game",
           description || null,
-          plannedAt || null,
-          startedAt || null,
-          endedAt || null,
+          plannedAtDb,
+          startedAtDb,
+          endedAtDb,
           creatorId,
         ],
       )
@@ -136,9 +141,9 @@ const createGame = async (gameData, creatorId) => {
         [
           name || "Unnamed Game",
           description || null,
-          plannedAt || null,
-          startedAt || null,
-          endedAt || null,
+          plannedAtDb,
+          startedAtDb,
+          endedAtDb,
           creatorId,
         ],
       );
