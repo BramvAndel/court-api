@@ -67,6 +67,16 @@ const authenticateManager = (req, res, next) => {
   next();
 };
 
+/**
+ * Middleware to check if user is manager OR platform admin
+ */
+const authenticateManagerOrAdmin = (req, res, next) => {
+  if (req.user.role !== "manager" && req.user.role !== "admin") {
+    return res.status(403).json({ message: "Manager or admin access required" });
+  }
+  next();
+};
+
 const isReadOnlyExemptPath = (req) => {
   if (req.path.startsWith("/api/admin")) return true;
   if (req.path.startsWith("/api/auth")) return true;
@@ -149,6 +159,7 @@ module.exports = {
   optionalAuthenticateToken,
   authenticateAdmin,
   authenticateManager,
+  authenticateManagerOrAdmin,
   enforceOrgWriteAccess,
   ownerOrAdmin,
 };

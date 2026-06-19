@@ -4,6 +4,7 @@ const authController = require("../controllers/authController");
 const {
   authenticateToken,
   authenticateManager,
+  authenticateManagerOrAdmin,
   enforceOrgWriteAccess,
 } = require("../middleware/auth");
 const {
@@ -24,7 +25,7 @@ router.post(
 router.get(
   "/",
   authenticateToken,
-  authenticateManager,
+  authenticateManagerOrAdmin,
   userController.getAllUsers,
 );
 router.get(
