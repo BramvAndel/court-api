@@ -227,6 +227,13 @@ const createOrgManager = async (orgId, { email, password, username }) => {
     throw error;
   }
 
+  const existingEmail = await query("SELECT userID FROM users WHERE email = ?", [email]);
+  if (existingEmail.length > 0) {
+    const error = new Error("Email already in use");
+    error.status = 409;
+    throw error;
+  }
+
   const resolvedUsername = username || email.split("@")[0];
   const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -245,9 +252,7 @@ const createOrgManager = async (orgId, { email, password, username }) => {
     };
   } catch (error) {
     if (error?.code === "ER_DUP_ENTRY") {
-      const conflictError = new Error(
-        "Email already taken in this organization",
-      );
+      const conflictError = new Error("Username already in use");
       conflictError.status = 409;
       throw conflictError;
     }
